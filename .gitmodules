@@ -1,0 +1,33 @@
+[submodule "ffmpeg_build/vo-aacenc"]
+	path = ffmpeg_build/vo-aacenc
+	url = https://github.com/mstorsjo/vo-aacenc.git
+[submodule "ffmpeg_build/libass"]
+	path = ffmpeg_build/libass
+	url = https://github.com/libass/libass.git
+[submodule "ffmpeg_build/fribidi"]
+	path = ffmpeg_build/fribidi
+	url = https://github.com/fribidi/fribidi.git
+[submodule "ffmpeg_build/freetype2"]
+	path = ffmpeg_build/freetype2
+	url = git://git.sv.gnu.org/freetype/freetype2.git
+[submodule "ffmpeg_build/libpng"]
+	path = ffmpeg_build/libpng
+	url = git://git.code.sf.net/p/libpng/code
+[submodule "ffmpeg_build/fdk-aac"]
+	path = ffmpeg_build/fdk-aac
+	url = https://github.com/mstorsjo/fdk-aac.git
+[submodule "ffmpeg_build/opencore-amr-code"]
+	path = ffmpeg_build/opencore-amr-code
+	url = https://git.code.sf.net/p/opencore-amr/code
+[submodule "ffmpeg_build/libjpeg-turbo"]
+	path = ffmpeg_build/libjpeg-turbo
+	url = https://github.com/libjpeg-turbo/libjpeg-turbo.git
+[submodule "ffmpeg_build/ffmpeg"]
+	path = ffmpeg_build/ffmpeg
+	url = git://source.ffmpeg.org/ffmpeg.git
+[submodule "ffmpeg_build/nettle"]
+	path = ffmpeg_build/nettle
+	url = https://git.lysator.liu.se/nettle/nettle.git
+[submodule "ffmpeg_build/x264"]
+	path = ffmpeg_build/x264
+	url = git://git.videolan.org/x264.git

@@ -1,0 +1,5 @@
+build/
+libs/
+src/main/cpp/ffmpeg-build/
+src/main/cpp/dist/
+.externalNativeBuild/

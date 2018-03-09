@@ -1,0 +1,58 @@
+def copyFileIfNotExists(src, dstFolder) {
+    def srcFile = new File(src)
+    if (!srcFile.exists()) {
+        return false
+    }
+    def file = new File(dstFolder + '/' + srcFile.name)
+    if (!file.exists()) {
+        copy {
+            from src
+            into dstFolder
+        }
+        return true
+    }
+    return false
+}
+
+def deleteOtherArchFromFolder(config, path) {
+    new File(path).listFiles().each { folder ->
+        if (!config.ndk.abiFilters.contains(folder.name)) {
+            delete {
+                delete folder
+            }
+        }
+    }
+}
+
+task prebuildTask() {
+    doLast {
+        // TODO support multiple flavors if used in the future
+        def config = android.defaultConfig
+
+        def here = project.buildscript.sourceFile.parentFile.absolutePath
+        def destRoot = here + '/src/main/cpp/dist'
+
+        // Delete the arch that are not in this build from the dist folder
+        deleteOtherArchFromFolder(config, destRoot)
+
+        // Also delete the obj files in build directory
+        android.buildTypes.all { type ->
+            deleteOtherArchFromFolder(config, project.buildDir.absolutePath
+                    + '/intermediates/cmake/' + type.name + '/obj')
+        }
+
+        // Copy all the binaries that are not already there
+        config.ndk.abiFilters.each { abi ->
+            def destFolder = destRoot + '/' + abi + '/'
+            def folder = new File(destFolder)
+            if (!folder.exists()) {
+                folder.mkdirs()
+            }
+            def dir = here + '/src/main/cpp/ffmpeg-build/' + abi
+            if (copyFileIfNotExists(dir + '/libffmpeg.so', destFolder)) {
+                println 'Copied libffmpeg.so (FFMPEG binary) for ' + abi
+            }
+        }
+    }
+}
+preBuild.dependsOn(prebuildTask)
