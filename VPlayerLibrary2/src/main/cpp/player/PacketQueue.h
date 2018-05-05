@@ -12,7 +12,7 @@ typedef struct AVPacketNode  {
     AVPacket pkt;
     struct AVPacketNode *next;
     intptr_t serial;
-} AVPacketList2;
+} AVPacketNode;
 
 class PacketQueue {
 public:

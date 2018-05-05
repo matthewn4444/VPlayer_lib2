@@ -22,7 +22,8 @@ StreamComponent::StreamComponent(AVFormatContext *context, enum AVMediaType type
         mPktSerial(-1),
         mQueue(NULL),
         mFlushPkt(flushPkt),
-        mQueueMaxSize(queueSize) {
+        mQueueMaxSize(queueSize),
+        mIsRealTime(false) {
 
     // Get the indexes that contain this type of stream
     for (int i = 0; i < context->nb_streams; ++i) {
@@ -163,6 +164,9 @@ int StreamComponent::open() {
         return ret;
     }
     mFContext->streams[mStreamIndex]->discard = AVDISCARD_DEFAULT;
+    mIsRealTime = !strcmp(mFContext->iformat->name, "rtp")
+           || !strcmp(mFContext->iformat->name, "rtsp")
+           || !strcmp(mFContext->iformat->name, "sdp");
 
     __android_log_print(ANDROID_LOG_VERBOSE, sTag, "%s stream has opened", typeName());
 
@@ -196,6 +200,7 @@ void StreamComponent::close() {
     mRequestEnd = false;
     mFinished = 0;
     mPktPending = false;
+    mIsRealTime = false;
 }
 
 Clock *StreamComponent::getMasterClock() {
@@ -248,9 +253,9 @@ bool StreamComponent::isQueueFull() {
     if (stream == NULL || pktQueue == NULL) {
         __android_log_print(ANDROID_LOG_WARN, sTag, "Stream %s has not chosen an index yet",
                             typeName());
-        return false;
+        return true;
     }
-    return (stream->disposition & AV_DISPOSITION_ATTACHED_PIC)
+    return hasAborted() || (stream->disposition & AV_DISPOSITION_ATTACHED_PIC)
            || (pktQueue->numPackets() > MIN_FRAMES
                && (!pktQueue->duration()
                    || av_q2d(stream->time_base) * pktQueue->duration() > 1.0));
@@ -258,6 +263,10 @@ bool StreamComponent::isQueueFull() {
 
 bool StreamComponent::isFinished() {
     return mFinished == getPacketQueue()->serial() && mQueue->getNumRemaining() == 0;
+}
+
+bool StreamComponent::isRealTime() {
+    return mIsRealTime;
 }
 
 int StreamComponent::decodeFrame(void *frame) {

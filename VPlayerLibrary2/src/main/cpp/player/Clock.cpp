@@ -6,7 +6,7 @@
 #define sTag "NativeClock"
 
 Clock::Clock(intptr_t *serial)  :
-        mSpeed(1),
+        speed(1),
         mSerial(0),
         mQueueSerial(serial),
         mBasePts(0),
@@ -41,7 +41,7 @@ void Clock::setTimeAt(double pts, double time, intptr_t serial) {
 
 void Clock::setSpeed(double speed) {
     updatePts();
-    mSpeed = speed;
+    speed = speed;
 }
 
 void Clock::syncToClock(Clock* clock) {
@@ -67,7 +67,7 @@ double Clock::getPts() {
         return mBasePts;
     } else {
         double time = now();
-        return mPtsDrift + time - (time - mLastUpdated) * (1.0 - mSpeed);
+        return mPtsDrift + time - (time - mLastUpdated) * (1.0 - speed);
     }
 }
 

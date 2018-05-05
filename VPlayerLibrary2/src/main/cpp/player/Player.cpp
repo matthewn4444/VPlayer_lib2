@@ -4,17 +4,19 @@ extern "C" {
 #include <libavutil/opt.h>
 }
 
+#define EXTCLK_MIN_FRAMES 2
+#define EXTCLK_MAX_FRAMES 10
+
+/* external clock speed adjustment constants for realtime sources based on buffer fullness */
+#define EXTCLK_SPEED_MIN  0.900
+#define EXTCLK_SPEED_MAX  1.010
+#define EXTCLK_SPEED_STEP 0.001
+
 #define MAX_QUEUE_SIZE (15 * 1024 * 1024)
 #define sTag "NativePlayer"
 
 static int decode_interrupt_callback(void *player) {
     return reinterpret_cast<Player *>(player)->isAborting() ? AVERROR_EXIT : 0;
-}
-
-static bool isRealtime(AVFormatContext *context) {
-    return !strcmp(context->iformat->name, "rtp")
-           || !strcmp(context->iformat->name, "rtsp")
-           || !strcmp(context->iformat->name, "sdp");
 }
 
 static void freeAVDictionaryList(AVDictionary **list, size_t size) {
@@ -51,7 +53,6 @@ Player::Player() :
         mSeekPos(0),
         mSeekRel(0),
         mIsEOF(false),
-        mIsRealTime(false),
         mInfiniteBuffer(false) {
     avformat_network_init();
 
@@ -116,6 +117,22 @@ Clock *Player::getExternalClock() {
     return &mExtClock;
 }
 
+void Player::updateExternalClockSpeed() {
+    int vNumPackets = mVideoStream ? mVideoStream->getPacketQueue()->numPackets() : -1;
+    int aNumPackets = mAudioStream ? mAudioStream->getPacketQueue()->numPackets() : -1;
+    if ((0 <= vNumPackets && vNumPackets < EXTCLK_MIN_FRAMES)
+            || (0 <= aNumPackets && aNumPackets < EXTCLK_MIN_FRAMES)) {
+        mExtClock.setSpeed(FFMAX(EXTCLK_SPEED_MIN, mExtClock.speed - EXTCLK_SPEED_STEP));
+    } else if (vNumPackets > EXTCLK_MAX_FRAMES && aNumPackets > EXTCLK_MAX_FRAMES) {
+        mExtClock.setSpeed(FFMAX(EXTCLK_SPEED_MAX, mExtClock.speed - EXTCLK_SPEED_STEP));
+    } else {
+        double speed = mExtClock.speed;
+        if (speed != 1.0) {
+            mExtClock.setSpeed(speed + EXTCLK_SPEED_STEP * (1.0 - speed) / fabs(1.0 - speed));
+        }
+    }
+}
+
 void Player::onQueueEmpty(StreamComponent *component) {
     mReadThreadCondition.notify_one();
 }
@@ -139,6 +156,7 @@ void Player::setCallback(IPlayerCallback *callback) {
 void Player::reset() {
     abort();
     if (mReadThreadId && mReadThreadId->get_id() != std::this_thread::get_id()) {
+        mReadThreadCondition.notify_all();
         __android_log_print(ANDROID_LOG_VERBOSE, sTag, "Waiting to join read thread...");
         mReadThreadId->join();
         delete mReadThreadId;
@@ -219,7 +237,6 @@ int Player::tOpenStreams(AVFormatContext *context) {
         return err;
     }
 
-    mInfiniteBuffer = mIsRealTime = isRealtime(context);
     for (i = 0; i < context->nb_streams; ++i) {
         context->streams[i]->discard = AVDISCARD_ALL;
     }
@@ -237,9 +254,9 @@ int Player::tOpenStreams(AVFormatContext *context) {
             mVideoStream->setVideoRenderer(mVideoRenderer);
         }
         if (streamTypeExists(context, AVMEDIA_TYPE_SUBTITLE)) {
-//            mSubtitleStream = new SubtitleStream(context, &mFlushPkt, this); TODO reenable
-//            mSubtitleStream->setCallback(mCallback);
-//            mVideoStream->setSubtitleComponent(mSubtitleStream);
+            mSubtitleStream = new SubtitleStream(context, &mFlushPkt, this);
+            mSubtitleStream->setCallback(mCallback);
+            mVideoStream->setSubtitleComponent(mSubtitleStream);
         }
         mAttachmentsRequested = true;
     }
@@ -247,6 +264,7 @@ int Player::tOpenStreams(AVFormatContext *context) {
     if (!mVideoStream && !mAudioStream) {
         return error(AVERROR_STREAM_NOT_FOUND, "Failed to open file, stream invalid");
     }
+    mInfiniteBuffer = mVideoStream ? mVideoStream->isRealTime() : mAudioStream->isRealTime();
 
     if (mVideoStream) {
         mAVComponents.push_back((StreamComponent *) mVideoStream);
@@ -389,21 +407,27 @@ int Player::tReadLoop(AVFormatContext *context) {
         // Read the incoming packet
         if ((ret = av_read_frame(context, &pkt)) < 0) {
             if ((ret == AVERROR_EOF) || (avio_feof(context->pb) && !mIsEOF)) {
-                for (StreamComponent *c : mAVComponents) {
-                    if ((ret = c->getPacketQueue()->enqueueEmpty()) < 0) {
-                        return error(ret);
-                    }
-                }
+// TODO check if this is needed, seems just to ping queues, remove in the future
+//                for (StreamComponent *c : mAVComponents) {
+//                    if ((ret = c->getPacketQueue()->enqueueEmpty()) < 0) {
+//                        return error(ret);
+//                    }
+//                }
                 mIsEOF = true;
             }
             if (context->pb && context->pb->error) {
                 error(context->pb->error);
                 break;
             }
+            // TODO is this really needed anymore?
+//            std::unique_lock<std::mutex> lk(waitMutex);
+//            mReadThreadCondition.wait_for(lk, (std::chrono::milliseconds(10)));
+            _log("Waiting cuz error or everything is done parsing, wake me up when needed (seek)");
             std::unique_lock<std::mutex> lk(waitMutex);
-            mReadThreadCondition.wait_for(lk, (std::chrono::milliseconds(10)));
+            mReadThreadCondition.wait(lk);
+            continue;
         } else {
-            mIsEOF = true;
+            mIsEOF = false;
         }
 
         // Check if the packet can be handled by a stream component
@@ -413,6 +437,7 @@ int Player::tReadLoop(AVFormatContext *context) {
                 if (c->canEnqueueStreamPacket(pkt)) {
 //                    _log("    Send packet to %ld | %ld | %d | %s", pkt.pts, pkt.duration, pkt.size,
 //                         c->typeName());
+                    // TODO check the pts and drop all frames if pts is behind main clock, test by removing neon
                     if ((ret = c->getPacketQueue()->enqueue(&pkt)) < 0) {
                         return error(ret, "Cannot enqueue packet to stream component");
                     }
@@ -498,3 +523,4 @@ int Player::sendMetadataReady(AVFormatContext *context) {
 void Player::sleepMs(long ms) {
     std::this_thread::sleep_for((std::chrono::milliseconds(ms)));
 }
+

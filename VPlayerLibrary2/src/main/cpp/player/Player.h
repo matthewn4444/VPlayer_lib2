@@ -36,6 +36,9 @@ public:
     IAudioRenderer *getAudioRenderer(AVCodecContext* context) override;
     Clock* getMasterClock() override;
     Clock* getExternalClock() override;
+
+    void updateExternalClockSpeed() override;
+
     void onQueueEmpty(StreamComponent* component) override;
     void abort() override;
 
@@ -86,7 +89,6 @@ private:
     bool mIsEOF;        // TODO can we not use this
 
     // Realtime variables
-    bool mIsRealTime;
     bool mInfiniteBuffer;       // TODO see if we can just use isrealtime instead of this
 
     std::mutex mErrorMutex;

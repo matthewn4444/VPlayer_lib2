@@ -20,6 +20,7 @@ public:
         virtual IAudioRenderer* getAudioRenderer(AVCodecContext* context) = 0;
         virtual Clock* getMasterClock() = 0;
         virtual Clock* getExternalClock() = 0;
+        virtual void updateExternalClockSpeed() = 0;
         virtual void togglePlayback() = 0;
         virtual void onQueueEmpty(StreamComponent* component) = 0;
     };
@@ -37,6 +38,7 @@ public:
     AVDictionary** getProperties(int* ret);
     bool isQueueFull();
     bool isFinished();
+    bool isRealTime();
 
     virtual bool canEnqueueStreamPacket(const AVPacket& packet) {
         return packet.stream_index == getStreamIndex();
@@ -122,6 +124,7 @@ private:
     size_t mQueueMaxSize;
 
     std::mutex mErrorMutex;
+    bool mIsRealTime;
 };
 
 

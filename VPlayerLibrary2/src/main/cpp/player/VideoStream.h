@@ -3,9 +3,16 @@
 
 #define VIDEO_PIC_QUEUE_SIZE 3
 
+extern "C" {
+#include <libavutil/pixdesc.h>
+#include <libavutil/imgutils.h>
+#include <libswscale/swscale.h>
+}
+
 #include "AVComponentStream.h"
 #include "IVideoRenderer.h"
 #include "SubtitleStream.h"
+#include "AvFramePool.h"
 
 class VideoStream : public AVComponentStream {
 public:
@@ -20,9 +27,7 @@ public:
 
     void setVideoRenderer(IVideoRenderer* videoRenderer);
 
-    void setSubtitleComponent(SubtitleStream* stream) {
-        mSubStream = stream;
-    }
+    void setSubtitleComponent(SubtitleStream* stream);
 
     bool canEnqueueStreamPacket(const AVPacket& packet) override;
     bool allowFrameDrops();
@@ -36,8 +41,8 @@ protected:
     AVDictionary* getPropertiesOfStream(AVCodecContext*, AVStream*, AVCodec*) override;
 
 private:
-    int processSubtitleQueue();
-    int videoProcess(double *remainingTime);
+    int processVideoFrame(AVFrame* avFrame, AVFrame** outFrame);
+    int synchronizeVideo(double *remainingTime);
     double getFrameDurationDiff(Frame* frame, Frame* nextFrame);
     void spawnRendererThreadIfHaveNot();
 
@@ -50,6 +55,9 @@ private:
     int mEarlyFrameDrops;
     int mLateFrameDrops;
     long mMaxFrameDuration;
+
+    AvFramePool mFramePool;
+    struct SwsContext* mSwsContext;
 };
 
 #endif //VIDEOSTREAM_H

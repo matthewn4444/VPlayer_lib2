@@ -25,9 +25,6 @@ FrameQueue::~FrameQueue() {
 
 void FrameQueue::abort() {
     mPktQueue.abort();
-    {
-        std::lock_guard<std::mutex> lk(mMutex);
-    }
     mCondition.notify_all();
 }
 
@@ -35,13 +32,11 @@ void FrameQueue::push() {
     if (++mWriteIndex >= mMaxSize) {
         mWriteIndex = 0;
     }
-    {
-        std::lock_guard<std::mutex> lk(mMutex);
-        mSize++;
-    }
+    mSize++;
     mCondition.notify_one();
 }
 
+// TODO try to simplify, always peeks then push
 void FrameQueue::pushNext() {
     if (mKeepLast && !mReadIndexShown) {
         mReadIndexShown = 1;
@@ -51,10 +46,7 @@ void FrameQueue::pushNext() {
     if (++mReadIndex >= mMaxSize) {
         mReadIndex = 0;
     }
-    {
-        std::lock_guard<std::mutex> lk(mMutex);
-        mSize--;
-    }
+    mSize--;
     mCondition.notify_one();
 }
 

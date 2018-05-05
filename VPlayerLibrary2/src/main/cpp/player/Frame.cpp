@@ -13,43 +13,34 @@ Frame::Frame(bool useAVFrame) :
         mFilePos(0),
         mSerial(-1),
         mIsAVFrame(useAVFrame) {
-    mBuffer = {0};
+    mSubtitle = {0};
     mSar = {0};
     if (useAVFrame) {
-        mBuffer.frame = av_frame_alloc();
-        if (mBuffer.frame == NULL) {
+        mFrame = av_frame_alloc();
+        if (mFrame == NULL) {
             __android_log_print(ANDROID_LOG_ERROR, sTag, "Cannot allocate frame");
         }
-    } else {
-        __android_log_print(ANDROID_LOG_INFO, sTag, "Constuctor Frame for subtittles");
-        mBuffer.subtitle = NULL;
     }
 }
 
 Frame::~Frame() {
     if (mIsAVFrame) {
-        av_frame_unref(mBuffer.frame);
-        av_frame_free(&mBuffer.frame);
-        mBuffer.frame = NULL;
+        av_frame_unref(mFrame);
+        av_frame_free(&mFrame);
     } else {
-        if (mBuffer.subtitle) {
-            avsubtitle_free(mBuffer.subtitle);
-            mBuffer.subtitle = NULL;
-        }
+        avsubtitle_free(&mSubtitle);
     }
+    mFrame = NULL;
 }
 
 bool Frame::reset() {
     if (mIsAVFrame) {
-        if (mBuffer.frame == NULL) {
+        if (mFrame == NULL) {
             return false;
         }
-        av_frame_unref(mBuffer.frame);
+        av_frame_unref(mFrame);
     } else {
-        if (mBuffer.subtitle == NULL) {
-            return false;
-        }
-        avsubtitle_free(mBuffer.subtitle);
+        avsubtitle_free(&mSubtitle);
     }
     return true;
 }
@@ -68,12 +59,28 @@ void Frame::setAVFrame(AVFrame *frame, AVRational duration, AVRational tb,
     mDuration = duration.num && duration.den ? av_q2d(duration) : 0;
     mFilePos = frame->pkt_pos;
     mSerial = serial;
-    av_frame_move_ref(mBuffer.frame, frame);
+    av_frame_move_ref(mFrame, frame);
+}
+
+void Frame::updateAsSubtitle(int width, int height, intptr_t serial) {
+    if (mIsAVFrame) {
+        return;
+    }
+    AVSubtitle* sub = subtitle();
+    if (sub->pts != AV_NOPTS_VALUE) {
+        mPts = sub->pts / (double) AV_TIME_BASE;
+    } else {
+        mPts = AV_NOPTS_VALUE;
+    }
+    mWidth = width;
+    mHeight = height;
+    mSerial = serial;
+    hasUploaded = false;
 }
 
 AVFrame *Frame::frame() {
     if (mIsAVFrame) {
-        return mBuffer.frame;
+        return mFrame;
     } else {
         return NULL;
     }
@@ -81,7 +88,7 @@ AVFrame *Frame::frame() {
 
 AVSubtitle *Frame::subtitle() {
     if (!mIsAVFrame) {
-        return mBuffer.subtitle;
+        return &mSubtitle;
     } else {
         return NULL;
     }
@@ -89,7 +96,7 @@ AVSubtitle *Frame::subtitle() {
 
 float Frame::startSubTimeMs() {
     if (!mIsAVFrame) {
-        return (float) mBuffer.subtitle->start_display_time / 1000;
+        return (float) mSubtitle.start_display_time / 1000;
     }
     return 0;
 }
@@ -97,10 +104,11 @@ float Frame::startSubTimeMs() {
 
 float Frame::endSubTimeMs() {
     if (!mIsAVFrame) {
-        return (float) mBuffer.subtitle->end_display_time / 1000;
+        return (float) mSubtitle.end_display_time / 1000;
     }
     return 0;
 }
+
 
 
 

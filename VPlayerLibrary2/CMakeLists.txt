@@ -23,6 +23,7 @@ add_library(application SHARED
               src/main/cpp/player/AudioRenderer.cpp
               src/main/cpp/player/StreamComponent.cpp
               src/main/cpp/player/AVComponentStream.cpp
+              src/main/cpp/player/AvFramePool.cpp
               src/main/cpp/player/VideoStream.cpp
               src/main/cpp/player/AudioStream.cpp
               src/main/cpp/player/SubtitleStream.cpp

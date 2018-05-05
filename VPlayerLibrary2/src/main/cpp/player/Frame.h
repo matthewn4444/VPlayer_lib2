@@ -7,11 +7,6 @@ extern "C" {
 #include <android/log.h>
 
 class Frame {
-    union Buffer {
-        AVFrame* frame;
-        AVSubtitle* subtitle;
-    };
-
 public:
     Frame(bool useAVFrame);
     ~Frame();
@@ -20,6 +15,7 @@ public:
 
     // TODO see if we can just pass the frame itself
     void setAVFrame(AVFrame *frame, AVRational duration, AVRational tb, intptr_t serial);
+    void updateAsSubtitle(int width, int height, intptr_t serial);
 
     intptr_t serial() {
         return mSerial;
@@ -48,11 +44,11 @@ public:
         return mHeight;
     }
 
+    AVFrame* frame();
+
     int format() {
         return mFormat;
     }
-
-    AVFrame* frame();
 
     AVSubtitle* subtitle();
 
@@ -65,8 +61,9 @@ public:
 
 private:
     // TODO try to simply this
+    AVFrame* mFrame;
+    AVSubtitle mSubtitle;
     const bool mIsAVFrame;
-    Buffer mBuffer;
 
     // AVFrame usage
     AVRational mSar;

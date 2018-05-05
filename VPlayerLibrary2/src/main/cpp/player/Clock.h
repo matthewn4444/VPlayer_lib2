@@ -22,7 +22,7 @@ public:
     double getTimeSinceLastUpdate();
     double getPts();
 
-    double mSpeed;
+    double speed;
     bool paused;
 
     intptr_t serial() {

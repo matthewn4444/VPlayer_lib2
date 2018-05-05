@@ -3,6 +3,7 @@
 
 #define MAX_FRAME_QUEUE_SIZE 16
 
+#include <atomic>
 #include <mutex>
 #include <vector>
 #include <condition_variable>
@@ -38,11 +39,15 @@ public:
         return mReadIndexShown > 0;
     }
 
+    size_t capacity() {
+        return mMaxSize;
+    }
+
 private:
-    std::vector<Frame*> mQueue;          // TODO if can be larger than MAX_FRAME_QUEUE_SIZE, dont make as pointer
+    std::vector<Frame*> mQueue;
     int mReadIndex;
     int mWriteIndex;
-    int mSize;
+    std::atomic<int> mSize;
     size_t mMaxSize;
     bool mKeepLast;
     char mReadIndexShown;
