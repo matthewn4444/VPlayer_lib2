@@ -66,7 +66,7 @@ int StreamComponent::pickByIndex(int streamNumber, bool fromAllStreams) {
         }
     } else if (streamNumber < mAvailStreamIndexes.size()) {
         // Choose index relative to all the type of stream
-        index = streamNumber;
+        index = mAvailStreamIndexes[streamNumber];
     }
     if (index == -1) {
         __android_log_print(ANDROID_LOG_WARN, sTag, "Cannot choose stream with index %d [%s]",
