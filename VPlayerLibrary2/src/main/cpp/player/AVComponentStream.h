@@ -2,6 +2,7 @@
 #define AVCOMPONENTSTREAM_H
 
 #include "StreamComponent.h"
+#include "FrameQueue.h"
 #include "Clock.h"
 
 static const double AV_COMP_NOSYNC_THRESHOLD = 10.0;
@@ -25,6 +26,7 @@ protected:
     int onProcessThread() override;
     void onReceiveDecodingFrame(void *frame, int *outRetCode) override;
     void onDecodeFrame(void* frame, AVPacket* pkt, int* outRetCode) override;
+    bool areFramesPending() override;
     void spawnRenderThread();
 
     bool hasRendererThreadStarted() {
@@ -34,11 +36,13 @@ protected:
     int open() override;
     void internalCleanUp();
 
+    FrameQueue* mQueue;
     Clock* mClock;
 
 private:
     void internalRenderThread();
 
+    size_t mQueueMaxSize;
     std::thread* mRenderThread;
 };
 

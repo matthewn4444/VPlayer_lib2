@@ -1,13 +1,13 @@
 #include "FrameQueue.h"
-#define sTag "FrameQueue"
+static const char* sTag = "FrameQueue";
 
-FrameQueue::FrameQueue(int streamIndex, bool isAVQueue, size_t maxSize) :
+FrameQueue::FrameQueue(bool isAVQueue, size_t maxSize) :
         mReadIndex(0),
         mWriteIndex(0),
         mSize(0),
         mMaxSize(FFMIN(maxSize, MAX_FRAME_QUEUE_SIZE)),
         mReadIndexShown(0),
-        mPktQueue(streamIndex),
+        mAbort(false),
         mKeepLast(isAVQueue) {
     mQueue.reserve(mMaxSize);
     for (int i = 0; i < mMaxSize; i++) {
@@ -17,6 +17,7 @@ FrameQueue::FrameQueue(int streamIndex, bool isAVQueue, size_t maxSize) :
 }
 
 FrameQueue::~FrameQueue() {
+    abort();
     for (int i = 0; i < mMaxSize; i++) {
         delete mQueue[i];
         mQueue[i] = NULL;
@@ -24,7 +25,7 @@ FrameQueue::~FrameQueue() {
 }
 
 void FrameQueue::abort() {
-    mPktQueue.abort();
+    mAbort = true;
     mCondition.notify_all();
 }
 
@@ -70,8 +71,8 @@ Frame* FrameQueue::peekWritable() {
     {
         // Wait for enough space for new frame
         std::unique_lock<std::mutex> lk(mMutex);
-        mCondition.wait(lk, [this] {return mSize < mMaxSize || mPktQueue.hasAborted();});
-        if (mPktQueue.hasAborted()) {
+        mCondition.wait(lk, [this] {return mSize < mMaxSize || mAbort;});
+        if (mAbort) {
             return NULL;
         }
     }
@@ -82,9 +83,9 @@ Frame* FrameQueue::peekReadable() {
     {
         std::unique_lock<std::mutex> lk(mMutex);
         mCondition.wait(lk, [this] {
-            return mSize - mReadIndexShown > 0 || mPktQueue.hasAborted();
+            return mSize - mReadIndexShown > 0 || mAbort;
         });
-        if (mPktQueue.hasAborted()) {
+        if (mAbort) {
             return NULL;
         }
     }
@@ -93,7 +94,7 @@ Frame* FrameQueue::peekReadable() {
 
 int64_t FrameQueue::getLastPos() {
     Frame* frame = mQueue[mReadIndex];
-    if (mReadIndexShown && frame->serial() == mPktQueue.serial()) {
+    if (mReadIndexShown && frame->serial() == mAbort) {
         return frame->filePosition();
     }
     return -1;

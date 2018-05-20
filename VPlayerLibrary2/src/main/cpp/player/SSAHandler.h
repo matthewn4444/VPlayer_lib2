@@ -10,11 +10,13 @@ public:
 
     int open(AVCodecContext *cContext, AVFormatContext *fContext) override;
 
-    void setRenderSize(int renderingWidth, int renderingHeight) override;
+    bool handleDecodedSubtitle(AVSubtitle* subtitle, intptr_t pktSerial) override;
 
-    bool handleDecodedFrame(Frame *frame, FrameQueue *queue, intptr_t mPktSerial) override;
+    AVSubtitle *getSubtitle() override;
 
-    int blendToFrame(double pts, AVFrame *vFrame, FrameQueue* queue) override;
+    int blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial) override;
+
+    bool areFramesPending() override;
 
     void blendSSA(AVFrame *vFrame, const ASS_Image *subImage);
 
@@ -23,6 +25,7 @@ private:
     ASS_Library* mAssLibrary;
     ASS_Renderer* mAssRenderer;
     ASS_Track* mAssTrack;
+    AVSubtitle mTmpSubtitle;
 };
 
 #endif //SSAHANDLER_H

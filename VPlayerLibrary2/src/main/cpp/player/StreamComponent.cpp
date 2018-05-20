@@ -7,8 +7,7 @@ const char *sTag = "StreamComponent";
 #define _log(...) __android_log_print(ANDROID_LOG_INFO, "VPlayer2Native", __VA_ARGS__);
 
 StreamComponent::StreamComponent(AVFormatContext *context, enum AVMediaType type,
-                                 AVPacket *flushPkt, ICallback *callback,
-                                 size_t queueSize) :
+                                 AVPacket *flushPkt, ICallback *callback) :
         mFContext(context),
         mCContext(NULL),
         mType(type),
@@ -20,9 +19,8 @@ StreamComponent::StreamComponent(AVFormatContext *context, enum AVMediaType type
         mCallback(callback),
         mDecodingThread(NULL),
         mPktSerial(-1),
-        mQueue(NULL),
+        mPacketQueue(NULL),
         mFlushPkt(flushPkt),
-        mQueueMaxSize(queueSize),
         mIsRealTime(false) {
 
     // Get the indexes that contain this type of stream
@@ -39,8 +37,8 @@ StreamComponent::~StreamComponent() {
 }
 
 void StreamComponent::abort() {
-    if (mQueue) {
-        mQueue->abort();
+    if (mPacketQueue) {
+        mPacketQueue->abort();
     }
 }
 
@@ -149,9 +147,7 @@ int StreamComponent::open() {
     close();
     int ret;
     AVCodec *codec = NULL;
-    mQueue = new FrameQueue(mStreamIndex,
-                            mType == AVMEDIA_TYPE_VIDEO || mType == AVMEDIA_TYPE_AUDIO,
-                            mQueueMaxSize);
+    mPacketQueue = new PacketQueue(mStreamIndex);
     if ((ret = getCodecInfo(mStreamIndex, &mCContext, &codec)) < 0) {
         return ret;
     }
@@ -170,14 +166,14 @@ int StreamComponent::open() {
 
     __android_log_print(ANDROID_LOG_VERBOSE, sTag, "%s stream has opened", typeName());
 
-    getPacketQueue()->begin(mFlushPkt);
+    mPacketQueue->begin(mFlushPkt);
     return 0;
 }
 
 void StreamComponent::close() {
     mRequestEnd = true;
-    if (mQueue && !hasAborted()) {
-        mQueue->abort();
+    if (mPacketQueue && !hasAborted()) {
+        mPacketQueue->abort();
     }
     __android_log_print(ANDROID_LOG_VERBOSE, sTag, "Waiting for %s decoding thread to join...",
                         av_get_media_type_string(mType));
@@ -189,9 +185,9 @@ void StreamComponent::close() {
         avcodec_free_context(&mCContext);
         mCContext = NULL;
     }
-    if (mQueue) {
-        delete mQueue;
-        mQueue = NULL;
+    if (mPacketQueue) {
+        delete mPacketQueue;
+        mPacketQueue = NULL;
     }
     if (mPktPending) {
         av_packet_unref(&mPkt);
@@ -217,8 +213,7 @@ bool StreamComponent::isPaused() {
 }
 
 bool StreamComponent::hasAborted() {
-    PacketQueue *queue = getPacketQueue();
-    return queue == NULL || queue->hasAborted();
+    return mPacketQueue == NULL || mPacketQueue->hasAborted();
 }
 
 int StreamComponent::getCodecInfo(int streamIndex, AVCodecContext **oCContext, AVCodec **oCodec) {
@@ -249,20 +244,19 @@ int StreamComponent::getCodecInfo(int streamIndex, AVCodecContext **oCContext, A
 
 bool StreamComponent::isQueueFull() {
     AVStream *stream = getStream();
-    PacketQueue *pktQueue = getPacketQueue();
-    if (stream == NULL || pktQueue == NULL) {
+    if (stream == NULL || mPacketQueue == NULL) {
         __android_log_print(ANDROID_LOG_WARN, sTag, "Stream %s has not chosen an index yet",
                             typeName());
         return true;
     }
     return hasAborted() || (stream->disposition & AV_DISPOSITION_ATTACHED_PIC)
-           || (pktQueue->numPackets() > MIN_FRAMES
-               && (!pktQueue->duration()
-                   || av_q2d(stream->time_base) * pktQueue->duration() > 1.0));
+           || (mPacketQueue->numPackets() > MIN_FRAMES
+               && (!mPacketQueue->duration()
+                   || av_q2d(stream->time_base) * mPacketQueue->duration() > 1.0));
 }
 
 bool StreamComponent::isFinished() {
-    return mFinished == getPacketQueue()->serial() && mQueue->getNumRemaining() == 0;
+    return mFinished == mPacketQueue->serial() && !areFramesPending();
 }
 
 bool StreamComponent::isRealTime() {
@@ -270,16 +264,15 @@ bool StreamComponent::isRealTime() {
 }
 
 int StreamComponent::decodeFrame(void *frame) {
-    PacketQueue* pktQueue = getPacketQueue();
     int ret = AVERROR(EAGAIN);
-    if (mStreamIndex < 0 || mStreamIndex >= mFContext->nb_streams || pktQueue == NULL
+    if (mStreamIndex < 0 || mStreamIndex >= mFContext->nb_streams || mPacketQueue == NULL
             || mCContext == NULL) {
         return hasAborted() ? AVERROR_EXIT : AVERROR_DECODER_NOT_FOUND;
     }
 
     while (1) {
         AVPacket pktTmp;
-        if (pktQueue->serial() == mPktSerial) {
+        if (mPacketQueue->serial() == mPktSerial) {
             do {
                 if (hasAborted()) {
                     return AVERROR_EXIT;
@@ -297,16 +290,16 @@ int StreamComponent::decodeFrame(void *frame) {
         }
 
         do {
-            if (pktQueue->numPackets() == 0) {
+            if (mPacketQueue->numPackets() == 0) {
                 mCallback->onQueueEmpty(this);
             }
             if (mPktPending) {
                 av_packet_move_ref(&pktTmp, &mPkt);
                 mPktPending = false;
-            } else if ((ret = pktQueue->dequeue(&pktTmp, &mPktSerial, true)) < 0) {
+            } else if ((ret = mPacketQueue->dequeue(&pktTmp, &mPktSerial, true)) < 0) {
                 return ret;
             }
-        } while (pktQueue->serial() != mPktSerial);
+        } while (mPacketQueue->serial() != mPktSerial);
 
         if (mPkt.data == mFlushPkt->data) {
             avcodec_flush_buffers(mCContext);

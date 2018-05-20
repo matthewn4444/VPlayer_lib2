@@ -12,7 +12,7 @@
 
 class FrameQueue {          // TODO use deque c++ object
 public:
-    FrameQueue(int streamIndex, bool isAVQueue, size_t maxSize);
+    FrameQueue(bool isAVQueue, size_t maxSize);
     ~FrameQueue();
 
     void abort();
@@ -27,10 +27,6 @@ public:
     int getNumRemaining();
     int64_t getLastPos();
 
-    PacketQueue* getPacketQueue() {
-        return &mPktQueue;
-    }
-
     std::mutex& getMutex() {
         return mMutex;
     }
@@ -42,6 +38,7 @@ public:
     size_t capacity() {
         return mMaxSize;
     }
+    std::condition_variable mCondition;
 
 private:
     std::vector<Frame*> mQueue;
@@ -52,9 +49,7 @@ private:
     bool mKeepLast;
     char mReadIndexShown;
     std::mutex mMutex;
-    std::condition_variable mCondition;
-    PacketQueue mPktQueue;
+    bool mAbort;
 };
-
 
 #endif //FRAMEQUEUE_H

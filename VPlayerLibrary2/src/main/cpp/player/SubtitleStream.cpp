@@ -2,8 +2,6 @@
 #include "SSAHandler.h"
 #include "ImageSubHandler.h"
 
-#define SUBPICTURE_QUEUE_SIZE 16
-
 static const char* sTag = "SubtitleStream";
 
 #define _log(...) __android_log_print(ANDROID_LOG_INFO, sTag, __VA_ARGS__);
@@ -13,7 +11,7 @@ static bool isTextSub(AVCodecID id) {
 }
 
 SubtitleStream::SubtitleStream(AVFormatContext* context, AVPacket* flushPkt, ICallback* callback) :
-        StreamComponent(context, AVMEDIA_TYPE_SUBTITLE, flushPkt, callback, SUBPICTURE_QUEUE_SIZE),
+        StreamComponent(context, AVMEDIA_TYPE_SUBTITLE, flushPkt, callback),
         mHandler(NULL) {
 }
 
@@ -24,18 +22,9 @@ SubtitleStream::~SubtitleStream() {
     }
 }
 
-void SubtitleStream::setRendererSize(int width, int height) {
-    mRenderWidth = width;
-    mRenderHeight = height;
-    if (mHandler) {
-        mHandler->setRenderSize(width, height);
-    }
-}
-
-
 int SubtitleStream::blendToFrame(AVFrame *vFrame, Clock* vclock) {
     if (mHandler) {
-        mHandler->blendToFrame(vclock->getPts(), vFrame, mQueue);
+        mHandler->blendToFrame(vclock->getPts(), vFrame, mPacketQueue->serial());
     }
     return 0;
 }
@@ -58,8 +47,6 @@ int SubtitleStream::open() {
                 __android_log_print(ANDROID_LOG_WARN, sTag, "Cannot open subtitles handler, skip");
                 delete mHandler;
                 mHandler = NULL;
-            } else {
-                mHandler->setRenderSize(mRenderWidth, mRenderHeight);
             }
         } else {
             __android_log_print(ANDROID_LOG_WARN, sTag, "No subtitle handler for type %d",
@@ -82,22 +69,24 @@ void SubtitleStream::onDecodeFrame(void* frame, AVPacket *pkt, int *ret) {
     }
 }
 
+bool SubtitleStream::areFramesPending() {
+    if (!mHandler) {
+        return false;
+    }
+    return mHandler->areFramesPending();
+}
+
 int SubtitleStream::onProcessThread() {
     _log("Process subtitle thread start");
-    Frame* sp;
     int ret;
     while (1) {
-        if (!(sp = mQueue->peekWritable())) {
-            return 0;
-        }
-        if ((ret = decodeFrame(sp->subtitle())) < 0) {
+        AVSubtitle* subtitle = mHandler->getSubtitle();
+        if (!subtitle || (ret = decodeFrame(subtitle)) < 0) {
             break;
-        } else if (ret) {
-            if (!mHandler->handleDecodedFrame(sp, mQueue, mPktSerial)) {
-                __android_log_print(ANDROID_LOG_WARN, sTag, "Does not support type of subtitle %d",
-                                    sp->subtitle()->format);
-                avsubtitle_free(sp->subtitle());
-            }
+        } else if (ret && !mHandler->handleDecodedSubtitle(subtitle, mPktSerial)) {
+            __android_log_print(ANDROID_LOG_WARN, sTag, "Does not support type of subtitle %d",
+                                subtitle->format);
+            avsubtitle_free(subtitle);
         }
     }
     return 0;

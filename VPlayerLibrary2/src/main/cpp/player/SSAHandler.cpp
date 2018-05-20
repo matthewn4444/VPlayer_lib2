@@ -29,7 +29,8 @@ SSAHandler::SSAHandler(AVCodecID codecID) :
         SubtitleHandlerBase(codecID),
         mAssLibrary(NULL),
         mAssRenderer(NULL),
-        mAssTrack(NULL) {
+        mAssTrack(NULL),
+        mTmpSubtitle({0}) {
 }
 
 SSAHandler::~SSAHandler() {
@@ -45,6 +46,7 @@ SSAHandler::~SSAHandler() {
         ass_library_done(mAssLibrary);
         mAssLibrary = NULL;
     }
+    avsubtitle_free(&mTmpSubtitle);
 }
 
 int SSAHandler::open(AVCodecContext *cContext, AVFormatContext *fContext) {
@@ -94,16 +96,11 @@ int SSAHandler::open(AVCodecContext *cContext, AVFormatContext *fContext) {
     return 0;
 }
 
-void SSAHandler::setRenderSize(int renderingWidth, int renderingHeight) {
-    if (mAssRenderer) {
-        ass_set_frame_size(mAssRenderer, renderingWidth, renderingHeight);
-    }
-}
-
-int SSAHandler::blendToFrame(double pts, AVFrame *vFrame, FrameQueue* queue) {
+int SSAHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial) {
     ASS_Image* image;
     {
         std::lock_guard<std::mutex> lk(mAssMutex);
+        ass_set_frame_size(mAssRenderer, vFrame->width, vFrame->height);
         image = ass_render_frame(mAssRenderer, mAssTrack, (long long int) vFrame->pts, NULL);
     }
     for (; image != NULL; image = image->next) {
@@ -112,8 +109,16 @@ int SSAHandler::blendToFrame(double pts, AVFrame *vFrame, FrameQueue* queue) {
     return 0;
 }
 
-bool SSAHandler::handleDecodedFrame(Frame *frame, FrameQueue *queue, intptr_t mPktSerial) {
-    AVSubtitle* subtitle = frame->subtitle();
+AVSubtitle *SSAHandler::getSubtitle() {
+    return &mTmpSubtitle;
+}
+
+bool SSAHandler::areFramesPending() {
+    // Does not process frames in libass
+    return false;
+}
+
+bool SSAHandler::handleDecodedSubtitle(AVSubtitle* subtitle, intptr_t pktSerial) {
     bool ret = subtitle->format == 1; // text subs
     if (ret) {
         std::lock_guard<std::mutex> lk(mAssMutex);
@@ -122,10 +127,9 @@ bool SSAHandler::handleDecodedFrame(Frame *frame, FrameQueue *queue, intptr_t mP
             ass_process_data(mAssTrack, text, (int) strlen(text));
         }
     }
-    avsubtitle_free(frame->subtitle());
+    avsubtitle_free(subtitle);
     return ret;
 }
-
 
 void SSAHandler::blendSSA(AVFrame *vFrame, const ASS_Image *subImage) {
     uint8_t* dst = vFrame->data[0] + vFrame->linesize[0] * subImage->dst_y + subImage->dst_x * 4;

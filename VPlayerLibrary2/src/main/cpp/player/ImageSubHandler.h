@@ -3,6 +3,7 @@
 
 #include <vector>
 #include "SubtitleStream.h"
+#include "FrameQueue.h"
 
 class ImageSubHandler : public SubtitleStream::SubtitleHandlerBase {
 public:
@@ -11,11 +12,13 @@ public:
 
     int open(AVCodecContext *cContext, AVFormatContext *fContext) override;
 
-    void setRenderSize(int renderingWidth, int renderingHeight) override;
+    bool handleDecodedSubtitle(AVSubtitle *subtitle, intptr_t pktSerial) override;
 
-    bool handleDecodedFrame(Frame *frame, FrameQueue *queue, intptr_t mPktSerial) override;
+    AVSubtitle *getSubtitle() override;
 
-    int blendToFrame(double pts, AVFrame *vFrame, FrameQueue* queue) override;
+    int blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial) override;
+
+    bool areFramesPending() override;
 
 private:
     struct FrameCache {
@@ -28,6 +31,7 @@ private:
     void blendFrames(AVFrame* dstFrame, AVFrame* srcFrame, int srcX, int srcY);
     int prepareSubFrame(AVSubtitleRect* rect, FrameCache& cache, int vWidth, int vHeight);
 
+    FrameQueue* mQueue;
     std::vector<FrameCache> mFrameCache;
     struct SwsContext* mSwsContext;
     int mCodecWidth;

@@ -13,9 +13,10 @@ public:
         SubtitleHandlerBase(AVCodecID codecID) : codec_id(codecID) {}
         virtual ~SubtitleHandlerBase() {}
         virtual int open(AVCodecContext* cContext, AVFormatContext* fContext) = 0;
-        virtual void setRenderSize(int renderingWidth, int renderingHeight) = 0;
-        virtual bool handleDecodedFrame(Frame *frame, FrameQueue *queue, intptr_t mPktSerial) = 0;
-        virtual int blendToFrame(double pts, AVFrame *vFrame, FrameQueue* queue) = 0;
+        virtual bool handleDecodedSubtitle(AVSubtitle *subtitle, intptr_t pktSerial) = 0;
+        virtual int blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial) = 0;
+        virtual AVSubtitle* getSubtitle() = 0;
+        virtual bool areFramesPending() = 0;
 
         const AVCodecID codec_id;
     };
@@ -23,7 +24,6 @@ public:
     SubtitleStream(AVFormatContext* context, AVPacket* flushPkt, ICallback* callback);
     virtual ~SubtitleStream();
 
-    void setRendererSize(int width, int height);
     int blendToFrame(AVFrame* vFrame, Clock* vclock);
 
 protected:
@@ -33,10 +33,10 @@ protected:
     int onProcessThread() override;
     void onDecodeFrame(void* frame, AVPacket* pkt, int* outRetCode) override;
 
+    bool areFramesPending() override;
+
 private:
     SubtitleHandlerBase* mHandler;
-    int mRenderWidth;
-    int mRenderHeight;
 };
 
 #endif //SUBTITLESTREAM_H

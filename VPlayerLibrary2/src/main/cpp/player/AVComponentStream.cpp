@@ -5,13 +5,19 @@
 
 AVComponentStream::AVComponentStream(AVFormatContext *context, enum AVMediaType type,
                                      AVPacket* flushPkt, ICallback* callback, size_t maxSize) :
-        StreamComponent(context, type, flushPkt, callback, maxSize),
+        StreamComponent(context, type, flushPkt, callback),
         mClock(NULL),
+        mQueue(NULL),
+        mQueueMaxSize(maxSize),
         mRenderThread(NULL) {
 }
 
 AVComponentStream::~AVComponentStream() {
     internalCleanUp();
+    if (mQueue) {
+        delete mQueue;
+        mQueue = NULL;
+    }
 }
 
 void AVComponentStream::setPaused(bool paused, int pausePlayRet) {
@@ -24,7 +30,8 @@ int AVComponentStream::open() {
 
     int ret = StreamComponent::open();
     if (ret >= 0) {
-        mClock = new Clock(&getPacketQueue()->serial());
+        mClock = new Clock(&mPacketQueue->serial());
+        mQueue = new FrameQueue(true /* isAVQueue */, mQueueMaxSize);
     }
     return ret;
 }
@@ -36,6 +43,10 @@ void AVComponentStream::onDecodeFrame(void *frame, AVPacket *pkt, int *outRetCod
         mPktPending = true;
         av_packet_move_ref(&mPkt, pkt);
     }
+}
+
+bool AVComponentStream::areFramesPending() {
+    return mQueue->getNumRemaining() > 0;
 }
 
 void AVComponentStream::onReceiveDecodingFrame(void *frame, int *ret) {
@@ -65,6 +76,7 @@ void AVComponentStream::internalRenderThread() {
 }
 
 void AVComponentStream::internalCleanUp() {
+    abort();
     if (mQueue) {
         mQueue->abort();
     }
@@ -82,6 +94,3 @@ void AVComponentStream::internalCleanUp() {
         mClock = NULL;
     }
 }
-
-
-

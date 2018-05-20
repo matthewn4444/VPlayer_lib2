@@ -103,7 +103,6 @@ int AudioStream::onProcessThread() {
 }
 
 int AudioStream::onRenderThread() {
-    PacketQueue *pktQueue = getPacketQueue();
     if ((mAudioRenderer = mCallback->getAudioRenderer(mCContext)) == NULL) {
         return error(AVERROR(ENOMEM), "Cannot create audio renderer");
     }
@@ -128,7 +127,7 @@ int AudioStream::onRenderThread() {
             }
             mQueue->pushNext();
             // TODO should we wait on fail? seek prob
-        } while (frame->serial() != pktQueue->serial());
+        } while (frame->serial() != mPacketQueue->serial());
 
         af = frame->frame();
         int wantedNbSamples = syncClocks(af);

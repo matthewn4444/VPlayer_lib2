@@ -55,9 +55,6 @@ void VideoStream::setVideoRenderer(IVideoRenderer *videoRenderer) {
 
 void VideoStream::setSubtitleComponent(SubtitleStream *stream) {
     mSubStream = stream;
-    if (mSubStream && mCContext) {
-        mSubStream->setRendererSize(mCContext->width, mCContext->height);
-    }
 }
 
 bool VideoStream::allowFrameDrops() {
@@ -68,9 +65,6 @@ int VideoStream::open() {
     int ret = AVComponentStream::open();
     mForceRefresh = false;
     mMaxFrameDuration = (mFContext->iformat->flags & AVFMT_TS_DISCONT) != 0 ? 10 : 3600;
-    if (ret >= 0 && mSubStream && mCContext) {
-        mSubStream->setRendererSize(mCContext->width, mCContext->height);
-    }
 
     // Init the pool to fit the size of the video frames
     if ((ret = mFramePool.resize(mQueue->capacity(), mCContext->width, mCContext->height,
@@ -117,7 +111,6 @@ int VideoStream::onProcessThread() {
     AVFrame* avFrame = av_frame_alloc(), *rgbaFrame;
     int ret;
     AVStream* stream = getStream();
-    PacketQueue* queue = getPacketQueue();
     AVRational tb = stream->time_base;
     AVRational frameRate = av_guess_frame_rate(mFContext, stream, NULL);
 
@@ -144,7 +137,7 @@ int VideoStream::onProcessThread() {
             double diff = (av_q2d(stream->time_base) * avFrame->pts) - getMasterClock()->getPts();
             if (!isnan(diff) && diff < 0 && fabs(diff) < AV_COMP_NOSYNC_THRESHOLD
                     && mPktSerial == mClock->serial()
-                    && queue->numPackets()) {
+                    && mPacketQueue->numPackets()) {
                 mEarlyFrameDrops++;
                 __android_log_print(ANDROID_LOG_VERBOSE, sTag,
                                     "Early frame drop happened (Count: %d)", mEarlyFrameDrops);
@@ -250,7 +243,6 @@ int VideoStream::processVideoFrame(AVFrame* avFrame, AVFrame** outFrame) {
 
 int VideoStream::synchronizeVideo(double *remainingTime) {
     double lastDuration, duration, delay, diff, syncThres, now;
-    PacketQueue *pktQueue = getPacketQueue();
     const bool isMasterClock = getClock() == getMasterClock();
 
     while(1) {
@@ -261,10 +253,11 @@ int VideoStream::synchronizeVideo(double *remainingTime) {
             lastvp = mQueue->peekLast();
             vp = mQueue->peekFirst();
 
-            if (vp->serial() != pktQueue->serial()) {
+            if (vp->serial() != mPacketQueue->serial()) {
                 // TODO i think this related to seeking?
                 mQueue->peekNext();
-                _log("VideoStream::videoProcess retry %ld %ld", vp->serial(), pktQueue->serial());
+                _log("VideoStream::videoProcess retry %ld %ld", vp->serial(),
+                     mPacketQueue->serial());
                 continue;
             }
 

@@ -5,17 +5,24 @@ extern "C" {
 #include <libswscale/swscale.h>
 };
 
+#define SUBPICTURE_QUEUE_SIZE 16
+
 static const char* sTag = "ImageSubHandler";
 static const double CACHE_FRAME_TIMEOUT_SEC = 20.0;
 
 ImageSubHandler::ImageSubHandler(AVCodecID codecID) :
         SubtitleHandlerBase(codecID),
         mSwsContext(NULL),
+        mQueue(NULL),
         mCodecWidth(0),
         mInvalidate(false) {
 }
 
 ImageSubHandler::~ImageSubHandler() {
+    if (mQueue) {
+        delete mQueue;
+        mQueue = NULL;
+    }
     for (int i = 0; i < mFrameCache.size(); ++i) {
         av_freep(mFrameCache[i].frame);
     }
@@ -28,29 +35,30 @@ ImageSubHandler::~ImageSubHandler() {
 int ImageSubHandler::open(AVCodecContext *cContext, AVFormatContext *fContext) {
     mCodecWidth = cContext->width;
     mInvalidate = true;
+
+    if (mQueue) {
+        delete mQueue;
+    }
+    mQueue = new FrameQueue(false /* isAVQueue */, SUBPICTURE_QUEUE_SIZE);
     return 0;
 }
 
-void ImageSubHandler::setRenderSize(int renderingWidth, int renderingHeight) {
-    // Does nothing
-}
-
-int ImageSubHandler::blendToFrame(double pts, AVFrame *vFrame, FrameQueue* queue) {
-    while (queue->getNumRemaining() > 0) {
-        Frame* sp = queue->peekFirst(), *sp2 = NULL;
+int ImageSubHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial) {
+    while (mQueue->getNumRemaining() > 0) {
+        Frame* sp = mQueue->peekFirst(), *sp2 = NULL;
         if (!sp->subtitle()) {
             __android_log_print(ANDROID_LOG_ERROR, sTag, "Frame is not subtitle frame");
             return AVERROR_INVALIDDATA;
         }
-        if (queue->getNumRemaining() > 1 && !(sp2 = queue->peekNext())->subtitle()) {
+        if (mQueue->getNumRemaining() > 1 && !(sp2 = mQueue->peekNext())->subtitle()) {
             __android_log_print(ANDROID_LOG_ERROR, sTag, "Next frame is not subtitle frame");
             return AVERROR_INVALIDDATA;
         }
 
-        if (sp->serial() != queue->getPacketQueue()->serial()
+        if (sp->serial() != pktSerial
                 || (sp2 && pts > sp2->startPts())
                 || (!sp2 && pts > sp->endPts())) {
-            queue->pushNext();
+            mQueue->pushNext();
             mInvalidate = true;
         } else {
             if (pts >= sp->startPts()) {
@@ -103,14 +111,22 @@ int ImageSubHandler::blendToFrame(double pts, AVFrame *vFrame, FrameQueue* queue
     return 0;
 }
 
-bool ImageSubHandler::handleDecodedFrame(Frame *frame, FrameQueue *queue, intptr_t mPktSerial) {
-    AVSubtitle* subtitle = frame->subtitle();
+bool ImageSubHandler::handleDecodedSubtitle(AVSubtitle *subtitle, intptr_t pktSerial) {
+    Frame* sp;
+    if (!(sp = mQueue->peekWritable())) {
+        return false;
+    }
     bool ret = subtitle->format == 0; // image subs
     if (ret) {
-        frame->updateAsSubtitle(0, 0, mPktSerial);
-        queue->push();
+        sp->updateAsSubtitle(0, 0, pktSerial);
+        mQueue->push();
     }
     return ret;
+}
+
+AVSubtitle *ImageSubHandler::getSubtitle() {
+    Frame* sp = mQueue->peekWritable();
+    return sp ? sp->subtitle() : NULL;
 }
 
 void ImageSubHandler::blendFrames(AVFrame *dstFrame, AVFrame *srcFrame, int srcX, int srcY) {
@@ -153,6 +169,10 @@ void ImageSubHandler::blendFrames(AVFrame *dstFrame, AVFrame *srcFrame, int srcX
         dst += dstStride;
         src += srcStride;
     }
+}
+
+bool ImageSubHandler::areFramesPending() {
+    return mQueue != NULL && mQueue->getNumRemaining() > 0;
 }
 
 int ImageSubHandler::prepareSubFrame(AVSubtitleRect* rect, FrameCache& cache, int vWidth,

@@ -3,11 +3,12 @@
 
 extern "C" {
 #include <libavutil/pixdesc.h>
+#include <libavformat/avformat.h>
 }
 #include <thread>
 #include <future>
 #include <vector>
-#include "FrameQueue.h"
+#include "PacketQueue.h"
 #include "IPlayerCallback.h"
 #include "IAudioRenderer.h"
 #include "Clock.h"
@@ -26,10 +27,10 @@ public:
     };
 
     StreamComponent(AVFormatContext* context, enum AVMediaType type, AVPacket* flushPkt,
-                    ICallback* callback, size_t queueSize);
+                    ICallback* callback);
     virtual ~StreamComponent();
 
-    void abort();
+    virtual void abort();
     int pickBest(int relativeStream = -1);
     int pickByIndex(int streamNumber, bool fromAllStreams = false);
     virtual void setPaused(bool paused, int pausePlayRet);     // TODO, i believe pauseplayret is only for realtime streams, check this (like rtmp)
@@ -67,15 +68,8 @@ public:
         return mAvailStreamIndexes.size();
     }
 
-    inline FrameQueue* getQueue() {
-        return mQueue;
-    }
-
-    inline PacketQueue* getPacketQueue() {
-        if (!mQueue) {
-            return NULL;
-        }
-        return mQueue->getPacketQueue();
+    PacketQueue* getPacketQueue() {
+        return mPacketQueue;
     }
 
 protected:
@@ -84,6 +78,7 @@ protected:
     virtual int onProcessThread() = 0;
     virtual void onDecodeFrame(void* frame, AVPacket* pkt, int* outRetCode) = 0;
     virtual void onReceiveDecodingFrame(void *frame, int *outRetCode) = 0;
+    virtual bool areFramesPending() = 0;
     virtual void onDecodeFlushBuffers();
 
     int error(int code, const char* message = NULL);
@@ -100,7 +95,7 @@ protected:
     virtual AVDictionary* getPropertiesOfStream(AVCodecContext*, AVStream*, AVCodec*);
     AVFormatContext* mFContext;
     AVCodecContext* mCContext;
-    FrameQueue* mQueue;
+    PacketQueue* mPacketQueue;
     AVMediaType mType;
     int mStreamIndex;
     IPlayerCallback* mPlayerCallback;
@@ -120,12 +115,8 @@ private:
     int getCodecInfo(int streamIndex, AVCodecContext** oCContext, AVCodec** oCodec);
     AVPacket* mFlushPkt;
 
-    // FrameQueue Init conditions
-    size_t mQueueMaxSize;
-
     std::mutex mErrorMutex;
     bool mIsRealTime;
 };
-
 
 #endif //STREAMCOMPONENT_H
