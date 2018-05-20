@@ -9,7 +9,8 @@ extern "C" {
 
 class IVideoRenderer {
 public:
-virtual int renderFrame(AVFrame* frame) = 0;
+virtual int writeFrame(AVFrame *frame) = 0;
+virtual int renderFrame() = 0;
 };
 
 #endif //IVIDEORENDERER_H

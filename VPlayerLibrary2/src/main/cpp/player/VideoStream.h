@@ -48,6 +48,7 @@ private:
 
     IVideoRenderer* mVideoRenderer;
     SubtitleStream* mSubStream;
+    bool mNextFrameWritten;
     bool mFrameStepMode;
     bool mForceRefresh;
     bool mAllowDropFrames;

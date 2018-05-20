@@ -32,13 +32,13 @@ void JniVideoRenderer::release() {
     }
 }
 
-int JniVideoRenderer::renderFrame(AVFrame *frame) {
+int JniVideoRenderer::writeFrame(AVFrame *frame) {
     std::lock_guard<std::mutex> lk(mMutex);
     if (!mWindow) {
         return 0;
     }
     int ret;
-    ANativeWindow_Buffer buffer;            // TODO can this be reused?
+    ANativeWindow_Buffer buffer;
     ANativeWindow_setBuffersGeometry(mWindow, frame->width, frame->height, WINDOW_FORMAT_RGBA_8888);
     if ((ret = ANativeWindow_lock(mWindow, &buffer, NULL)) < 0) {
         return ret;
@@ -65,11 +65,17 @@ int JniVideoRenderer::renderFrame(AVFrame *frame) {
         return AVERROR(EOPNOTSUPP);
     }
 
-    // TODO see if we can do this in a vendering thread earlier (just before rendering time)
     int bufferLineSize = buffer.stride * 4;
     av_image_copy((uint8_t**) &buffer.bits, &bufferLineSize, (const uint8_t **) frame->data,
                   frame->linesize, (AVPixelFormat) frame->format, buffer.width, buffer.height);
+    return 0;
+}
 
+int JniVideoRenderer::renderFrame() {
+    std::lock_guard<std::mutex> lk(mMutex);
+    if (!mWindow) {
+        return 0;
+    }
     ANativeWindow_unlockAndPost(mWindow);
     return 0;
 }

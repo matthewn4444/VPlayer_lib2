@@ -18,7 +18,8 @@ public:
     void onSurfaceCreated(JNIEnv* env, jobject surface);
     void onSurfaceDestroyed();
 
-    int renderFrame(AVFrame *frame) override;
+    int writeFrame(AVFrame *frame) override;
+    int renderFrame() override;
 
 private:
     void release();

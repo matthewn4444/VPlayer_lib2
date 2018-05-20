@@ -19,6 +19,7 @@ VideoStream::VideoStream(AVFormatContext* context, AVPacket* flushPkt, ICallback
         AVComponentStream(context, AVMEDIA_TYPE_VIDEO, flushPkt, callback, VIDEO_PIC_QUEUE_SIZE),
         mFrameStepMode(false),
         mAllowDropFrames(true),
+        mNextFrameWritten(false),
         mVideoRenderer(NULL),
         mForceRefresh(false),
         mFrameTimer(0),
@@ -185,19 +186,42 @@ int VideoStream::onRenderThread() {
             }
 
             synchronizeVideo(&remainingTime);
+            bool readyToRender = mForceRefresh && mQueue->isReadIndexShown();
+
+            // Write frame to renderer before render time (or at render time) to avoid extra delay
+            // from posting frame to display since this operation can take a couple of ms
+            if (!mNextFrameWritten) {
+                if (readyToRender) {
+                    // Late frame write, might be from dropped frames or heavy subtitles render
+                    if ((ret = mVideoRenderer->writeFrame(mQueue->peekLast()->frame())) < 0) {
+                        return error(ret, "Was not able to write to video frame");
+                    }
+                    mNextFrameWritten = true;
+                } else if (mQueue->getNumRemaining() > 0) {
+                    if ((ret = mVideoRenderer->writeFrame(mQueue->peekFirst()->frame())) < 0) {
+                        return error(ret, "Was not able to write to video frame");
+                    }
+                    mNextFrameWritten = true;
+
+                    // Writing frame might take some time so re-evaluate the remaining time
+                    synchronizeVideo(&remainingTime);
+                    readyToRender = mForceRefresh && mQueue->isReadIndexShown();
+                }
+            }
 
             // Display the video frame
-            if (mForceRefresh && mQueue->isReadIndexShown()) {
+            if (readyToRender) {
                 Frame* vp = mQueue->peekLast();
                 if (!vp->hasUploaded) {
                     if (mVideoRenderer) {
-                        if ((ret = mVideoRenderer->renderFrame(vp->frame())) < 0) {
+                        if ((ret = mVideoRenderer->renderFrame()) < 0) {
                             return error(ret, "Was not able to reader video frame");
                         }
                     } else {
                         __android_log_print(ANDROID_LOG_ERROR, sTag,
                                             "No video renderer exists to render to screen");
                     }
+                    mNextFrameWritten = false;
                     vp->hasUploaded = true;
                     vp->flipVertical = vp->frame()->linesize[0] < 0;
                 }
