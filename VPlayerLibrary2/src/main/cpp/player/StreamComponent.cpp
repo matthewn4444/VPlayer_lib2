@@ -332,5 +332,7 @@ int StreamComponent::internalOpen() {
 
 void StreamComponent::internalProcessThread() {
     IPlayerCallback::UniqueCallback unCallback(mPlayerCallback);
-    onProcessThread();
+    if (!hasAborted()) {
+        onProcessThread();
+    }
 }

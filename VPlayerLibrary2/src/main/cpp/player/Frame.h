@@ -28,6 +28,9 @@ public:
         return mSar;
     }
 
+    /**
+     * @return Gets the current time of this frame in sec
+     */
     double pts() {
         return mPts;
     }
@@ -52,9 +55,9 @@ public:
 
     AVSubtitle* subtitle();
 
-    float startSubTimeMs();
+    double startPts();
 
-    float endSubTimeMs();
+    double endPts();
 
     bool hasUploaded;
     bool flipVertical;

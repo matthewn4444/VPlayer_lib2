@@ -94,22 +94,16 @@ AVSubtitle *Frame::subtitle() {
     }
 }
 
-float Frame::startSubTimeMs() {
+double Frame::startPts() {
     if (!mIsAVFrame) {
-        return (float) mSubtitle.start_display_time / 1000;
+        return ((double) mSubtitle.start_display_time / AV_TIME_BASE / 1000) + mPts;
     }
     return 0;
 }
 
-
-float Frame::endSubTimeMs() {
+double Frame::endPts() {
     if (!mIsAVFrame) {
-        return (float) mSubtitle.end_display_time / 1000;
+        return ((double) mSubtitle.end_display_time / AV_TIME_BASE / 1000) + mPts;
     }
     return 0;
 }
-
-
-
-
-

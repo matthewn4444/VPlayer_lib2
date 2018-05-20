@@ -196,25 +196,8 @@ int VideoStream::onRenderThread() {
             // Display the video frame
             if (mForceRefresh && mQueue->isReadIndexShown()) {
                 Frame* vp = mQueue->peekLast();
-                // TODO most liekly not used because moved blending to process thread
-//                if (mSubStream) {
-//                    if (!mSubStream->isSSASubtitle()) {
-//                        FrameQueue *sQueue = mSubStream->getQueue();
-//                        if (sQueue->getNumRemaining() > 0) {
-//                            sp = sQueue->peekFirst();
-//
-//                            // If the subtitle should not be shown, drop it
-//                            if (vp->pts() <
-//                                sp->pts() + sp->startSubTimeMs()) {        // TODO prob see if past
-//                                sp = NULL;
-//                            }
-//                        }
-//                    }
-//                }
-
                 if (!vp->hasUploaded) {
                     if (mVideoRenderer) {
-//                        _log("Video render frame");
                         if ((ret = mVideoRenderer->renderFrame(vp->frame())) < 0) {
                             return error(ret, "Was not able to reader video frame");
                         }
@@ -258,7 +241,7 @@ int VideoStream::processVideoFrame(AVFrame* avFrame, AVFrame** outFrame) {
     }
 
     // Blend subtitles to frame
-    if (mSubStream && mSubStream->blendToFrame(tmpFrame) < 0) {
+    if (mSubStream && mSubStream->blendToFrame(tmpFrame, getClock()) < 0) {
         __android_log_print(ANDROID_LOG_WARN, sTag, "Failed to composite subtitles to video frame");
     }
     *outFrame = tmpFrame;
@@ -266,7 +249,6 @@ int VideoStream::processVideoFrame(AVFrame* avFrame, AVFrame** outFrame) {
 }
 
 int VideoStream::synchronizeVideo(double *remainingTime) {
-    int ret;
     double lastDuration, duration, delay, diff, syncThres, now;
     PacketQueue *pktQueue = getPacketQueue();
     const bool isMasterClock = getClock() == getMasterClock();
@@ -331,7 +313,7 @@ int VideoStream::synchronizeVideo(double *remainingTime) {
                 std::lock_guard<std::mutex> lk(mQueue->getMutex());
                 if (!isnan(vp->pts())) {
                     mClock->setPts(vp->pts(), vp->serial());
-                    mClock->syncToClock(getExternalClock());
+                    getExternalClock()->syncToClock(mClock);
                 }
             }
 
@@ -348,12 +330,6 @@ int VideoStream::synchronizeVideo(double *remainingTime) {
                     continue;
                 }
             }
-
-            // Synchronize subtitles
-            if (mSubStream && (ret = mSubStream->synchronizeQueue(mClock)) < 0) {
-                return ret;
-            }
-
             mQueue->pushNext();
             mForceRefresh = true;
             if (mFrameStepMode && !isPaused()) {

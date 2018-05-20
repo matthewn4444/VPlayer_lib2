@@ -447,8 +447,10 @@ int Player::tReadLoop(AVFormatContext *context) {
             }
         }
         if (!handled) {
-            __android_log_print(ANDROID_LOG_VERBOSE, sTag, "This packet is not handled %i %ld",
-                                pkt.stream_index, pkt.pts);
+            if (context->streams[pkt.stream_index]->codecpar->codec_type != AVMEDIA_TYPE_AUDIO) {
+                __android_log_print(ANDROID_LOG_VERBOSE, sTag, "This packet is not handled %i %ld",
+                                    pkt.stream_index, pkt.pts);
+            }
             av_packet_unref(&pkt);
         }
         ret = 0;

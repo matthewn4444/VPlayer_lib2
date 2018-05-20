@@ -41,7 +41,7 @@ void Clock::setTimeAt(double pts, double time, intptr_t serial) {
 
 void Clock::setSpeed(double speed) {
     updatePts();
-    speed = speed;
+    this->speed = speed;
 }
 
 void Clock::syncToClock(Clock* clock) {
