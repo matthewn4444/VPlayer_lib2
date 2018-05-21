@@ -56,7 +56,7 @@ void Frame::setAVFrame(AVFrame *frame, AVRational duration, AVRational tb,
     mHeight = frame->height;
     mFormat = frame->format;
     mPts = (frame->pts == AV_NOPTS_VALUE) ? NAN : frame->pts * av_q2d(tb);
-    mDuration = duration.num && duration.den ? av_q2d(duration) : 0;
+    mDuration = duration.num && duration.den ? 1 / av_q2d(duration) : 0;
     mFilePos = frame->pkt_pos;
     mSerial = serial;
     av_frame_move_ref(mFrame, frame);
