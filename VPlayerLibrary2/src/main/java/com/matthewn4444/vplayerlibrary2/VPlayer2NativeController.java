@@ -8,6 +8,11 @@ import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
+import android.support.annotation.MainThread;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Surface;
 
@@ -36,6 +41,8 @@ public class VPlayer2NativeController {
                     ? AudioFormat.CHANNEL_OUT_7POINT1_SURROUND : AudioFormat.CHANNEL_OUT_7POINT1
     };
 
+    private static final long SEND_SUBTITLE_FRAME_SIZE_TIMEOUT = 300;
+
     static {
         // TODO allow dynamic path loading, check for text relocations for armv7
         System.loadLibrary("ffmpeg");
@@ -58,8 +65,25 @@ public class VPlayer2NativeController {
     private boolean mStreamReady;
     private boolean mHasInitError;
 
-    VPlayer2NativeController() {
-        if (!initPlayer()) {
+    // Sending subtitles to player, but delay sending to avoid flooding
+    private int mPendingSubtitleWidth;
+    private int mPendingSubtitleHeight;
+    private long mLastTimeSentSubtitleSize;
+    private boolean mWaitingToSendSubtitleSize;
+
+    private final Runnable mSendSubtitleFrameSize = new Runnable() {
+        @Override
+        public void run() {
+            mWaitingToSendSubtitleSize = false;
+            mLastTimeSentSubtitleSize = SystemClock.currentThreadTimeMillis();
+            setSubtitleFrameSize(mPendingSubtitleWidth, mPendingSubtitleHeight);
+        }
+    };
+
+    VPlayer2NativeController(int displayWidth, int displayHeight) {
+        if (initPlayer()) {
+            setSubtitleFrameSize(displayWidth, displayHeight);
+        } else {
             mHasInitError = true;
         }
     }
@@ -100,6 +124,22 @@ public class VPlayer2NativeController {
                 destroyPlayer();
             }
         });
+    }
+
+    @MainThread
+    public void internalSetSubtitleFrameSize(int width, int height) {
+        mPendingSubtitleWidth = width;
+        mPendingSubtitleHeight = height;
+
+        // Avoid flooding the player with adjusting its frame size by waiting after last input
+        if (SystemClock.currentThreadTimeMillis() - mLastTimeSentSubtitleSize
+                > SEND_SUBTITLE_FRAME_SIZE_TIMEOUT) {
+            mMainHandler.removeCallbacks(mSendSubtitleFrameSize);
+            mSendSubtitleFrameSize.run();
+        } else if (!mWaitingToSendSubtitleSize) {
+            mMainHandler.postDelayed(mSendSubtitleFrameSize, SEND_SUBTITLE_FRAME_SIZE_TIMEOUT);
+            mWaitingToSendSubtitleSize = true;
+        }
     }
 
     // Called from jni
@@ -198,7 +238,9 @@ public class VPlayer2NativeController {
 
     private native boolean nativeOpen(String streamFileUrl);
 
-    public native void surfaceCreated(Surface surface);
+    private native void setSubtitleFrameSize(int width, int height);
+
+    public native void surfaceCreated(@NonNull Surface videoSurface, @Nullable Surface subSurface);
 
     native void surfaceDestroyed();
 

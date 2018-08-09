@@ -26,6 +26,7 @@ add_library(application SHARED
               src/main/cpp/player/AvFramePool.cpp
               src/main/cpp/player/VideoStream.cpp
               src/main/cpp/player/AudioStream.cpp
+              src/main/cpp/player/SubtitleFrameQueue.cpp
               src/main/cpp/player/SubtitleStream.cpp
               src/main/cpp/player/SSAHandler.cpp
               src/main/cpp/player/ImageSubHandler.cpp

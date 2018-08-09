@@ -62,15 +62,22 @@ bool VideoStream::allowFrameDrops() {
     return mAllowDropFrames && getClock() != getMasterClock();
 }
 
+float VideoStream::getAspectRatio() {
+    return (float) mCContext->width / mCContext->height;
+}
+
 int VideoStream::open() {
     int ret = AVComponentStream::open();
+    if (ret < 0) {
+        return ret;
+    }
     mForceRefresh = false;
     mMaxFrameDuration = (mFContext->iformat->flags & AVFMT_TS_DISCONT) != 0 ? 10 : 3600;
 
     // Init the pool to fit the size of the video frames
     if ((ret = mFramePool.resize(mQueue->capacity(), mCContext->width, mCContext->height,
-                                 AV_PIX_FMT_RGBA)) < 0) {
-        __android_log_print(ANDROID_LOG_ERROR, sTag, "Unable to create frame pool");
+                                AV_PIX_FMT_RGBA)) < 0) {
+        __android_log_print(ANDROID_LOG_ERROR, sTag, "Unable to create video frame pool");
     }
     return ret;
 }
@@ -142,6 +149,7 @@ int VideoStream::onProcessThread() {
                 mEarlyFrameDrops++;
                 __android_log_print(ANDROID_LOG_VERBOSE, sTag,
                                     "Early frame drop happened (Count: %d)", mEarlyFrameDrops);
+                mSubStream->getPendingSubtitleFrame(avFrame->pts);
                 av_frame_unref(avFrame);
                 continue;
             }
@@ -190,17 +198,13 @@ int VideoStream::onRenderThread() {
 
             // Write frame to renderer before render time (or at render time) to avoid extra delay
             // from posting frame to display since this operation can take a couple of ms
-            if (!mNextFrameWritten) {
+            if (!mNextFrameWritten && mVideoRenderer) {
                 if (readyToRender) {
                     // Late frame write, might be from dropped frames or heavy subtitles render
-                    if ((ret = mVideoRenderer->writeFrame(mQueue->peekLast()->frame())) < 0) {
-                        return error(ret, "Was not able to write to video frame");
-                    }
+                    writeFrameToRender(mQueue->peekLast()->frame());
                     mNextFrameWritten = true;
                 } else if (mQueue->getNumRemaining() > 0) {
-                    if ((ret = mVideoRenderer->writeFrame(mQueue->peekFirst()->frame())) < 0) {
-                        return error(ret, "Was not able to write to video frame");
-                    }
+                    writeFrameToRender(mQueue->peekFirst()->frame());
                     mNextFrameWritten = true;
 
                     // Writing frame might take some time so re-evaluate the remaining time
@@ -257,9 +261,18 @@ int VideoStream::processVideoFrame(AVFrame* avFrame, AVFrame** outFrame) {
         return ret;
     }
 
-    // Blend subtitles to frame
-    if (mSubStream && mSubStream->blendToFrame(tmpFrame, getClock()) < 0) {
-        __android_log_print(ANDROID_LOG_WARN, sTag, "Failed to composite subtitles to video frame");
+    if (!hasAborted() && mSubStream) {
+        const double clockPts = getClock()->getPts();
+        if (mVideoRenderer != NULL && mVideoRenderer->writeSubtitlesSeparately()) {
+            if (mSubStream->prepareSubtitleFrame(avFrame->pts, clockPts) < 0) {
+                __android_log_print(ANDROID_LOG_WARN, sTag, "Failed to prepare subtitle frames");
+            }
+        } else {
+            // Blend to video video frame
+            if (mSubStream->blendToFrame(tmpFrame, clockPts, true) < 0) {
+                __android_log_print(ANDROID_LOG_WARN, sTag, "Failed to blend subs to video frame");
+            }
+        }
     }
     *outFrame = tmpFrame;
     return 0;
@@ -343,6 +356,7 @@ int VideoStream::synchronizeVideo(double *remainingTime) {
                     __android_log_print(ANDROID_LOG_VERBOSE, sTag,
                                         "Late frame drop happened (Count: %d)", mLateFrameDrops);
                     mQueue->pushNext();
+                    mSubStream->getPendingSubtitleFrame(vp->frame()->pts);
                     mFramePool.recycle(vp->frame());
                     continue;
                 }
@@ -373,4 +387,20 @@ double VideoStream::getFrameDurationDiff(Frame *frame, Frame *nextFrame) {
         return frame->duration();
     }
     return duration;
+}
+
+int VideoStream::writeFrameToRender(AVFrame* frame) {
+    int ret = 0;
+
+    // If subtitles are written to a separate layer, get the pending frame
+    AVFrame* subFrame = NULL;
+    if (mSubStream != NULL && mVideoRenderer->writeSubtitlesSeparately()) {
+        subFrame = mSubStream->getPendingSubtitleFrame(frame->pts);
+    }
+
+    // Write frame (video and subtitles) to renderer
+    if ((ret = mVideoRenderer->writeFrame(frame, subFrame)) < 0) {
+        return error(ret, "Was not able to write to video frame");
+    }
+    return ret;
 }

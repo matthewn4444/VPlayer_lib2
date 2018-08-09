@@ -14,9 +14,11 @@ public:
 
     AVSubtitle *getSubtitle() override;
 
-    int blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial) override;
+    int blendToFrame(double pts, AVFrame *frame, intptr_t pktSerial, bool force = false) override;
 
     bool areFramesPending() override;
+
+    void invalidateFrame() override;
 
     void blendSSA(AVFrame *vFrame, const ASS_Image *subImage);
 

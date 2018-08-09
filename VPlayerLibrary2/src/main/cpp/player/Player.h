@@ -46,6 +46,8 @@ public:
         return mAbortRequested;
     }
 
+    void setSubtitleFrameSize(int width, int height);
+
     void setCallback(IPlayerCallback *callback);
 private:
     void reset();
@@ -68,6 +70,8 @@ private:
     SubtitleStream* mSubtitleStream;
     // TODO handle attachments
 
+    int mSubtitleFrameWidth;
+    int mSubtitleFrameHeight;
     IVideoRenderer* mVideoRenderer;
     IPlayerCallback* mCallback;
     std::condition_variable mReadThreadCondition;

@@ -123,7 +123,7 @@ extern "C" JNIEXPORT void JAVA_EXPORT_NAME(destroyPlayer) (JNIEnv *env, jobject 
 }
 
 extern "C" JNIEXPORT void JAVA_EXPORT_NAME(surfaceCreated) (JNIEnv *env, jobject instance,
-                                                    jobject surface) {
+                                                    jobject vSurface, jobject sSurface) {
     JniVideoRenderer* vRenderer = getVideoRendererPtr(env, instance);
     if (!vRenderer) {
         vRenderer = new JniVideoRenderer();
@@ -134,7 +134,7 @@ extern "C" JNIEXPORT void JAVA_EXPORT_NAME(surfaceCreated) (JNIEnv *env, jobject
             player->setVideoRenderer(vRenderer);
         }
     }
-    vRenderer->onSurfaceCreated(env, surface);
+    vRenderer->onSurfaceCreated(env, vSurface, sSurface);
 }
 
 extern "C" JNIEXPORT void JAVA_EXPORT_NAME(surfaceDestroyed) (JNIEnv *env, jobject instance) {
@@ -143,6 +143,15 @@ extern "C" JNIEXPORT void JAVA_EXPORT_NAME(surfaceDestroyed) (JNIEnv *env, jobje
         vRenderer->onSurfaceDestroyed();
     }
 }
+
+extern "C" JNIEXPORT void JAVA_EXPORT_NAME(setSubtitleFrameSize) (JNIEnv *env, jobject instance,
+                                                                jint width, jint height) {
+    Player* player = getPlayerPtr(env, instance);
+    if (player) {
+        player->setSubtitleFrameSize(width, height);
+    }
+}
+
 
 extern "C" JNIEXPORT jboolean JNICALL JAVA_EXPORT_NAME(nativeOpen) (JNIEnv *env, jobject instance,
                                                                    jstring streamFileUrl) {

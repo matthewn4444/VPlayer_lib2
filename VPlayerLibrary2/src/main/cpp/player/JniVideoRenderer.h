@@ -15,17 +15,22 @@ public:
     JniVideoRenderer();
     ~JniVideoRenderer();
 
-    void onSurfaceCreated(JNIEnv* env, jobject surface);
+    void onSurfaceCreated(JNIEnv* env, jobject vSurface, jobject sSurface);
     void onSurfaceDestroyed();
 
-    int writeFrame(AVFrame *frame) override;
+    int writeFrame(AVFrame* videoFrame, AVFrame* subtitleFrame) override;
     int renderFrame() override;
 
+    bool writeSubtitlesSeparately() override;
+
 private:
+    int writeFrameToWindow(AVFrame* frame, ANativeWindow* window);
     void release();
 
     std::mutex mMutex;
     ANativeWindow* mWindow;
+    ANativeWindow* mSubWindow;
+    bool mSubWindowHasData;
 };
 
 #endif //JNIVIDEORENDERER_H

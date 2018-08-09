@@ -32,6 +32,8 @@ public:
     bool canEnqueueStreamPacket(const AVPacket& packet) override;
     bool allowFrameDrops();
 
+    float getAspectRatio();
+
 protected:
     int onProcessThread() override;
     int onRenderThread() override;
@@ -45,6 +47,7 @@ private:
     int synchronizeVideo(double *remainingTime);
     double getFrameDurationDiff(Frame* frame, Frame* nextFrame);
     void spawnRendererThreadIfHaveNot();
+    int writeFrameToRender(AVFrame* frame);
 
     IVideoRenderer* mVideoRenderer;
     SubtitleStream* mSubStream;

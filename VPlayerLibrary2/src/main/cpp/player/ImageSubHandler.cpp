@@ -43,7 +43,8 @@ int ImageSubHandler::open(AVCodecContext *cContext, AVFormatContext *fContext) {
     return 0;
 }
 
-int ImageSubHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial) {
+int ImageSubHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial, bool force) {
+    int ret = 0;
     while (mQueue->getNumRemaining() > 0) {
         Frame* sp = mQueue->peekFirst(), *sp2 = NULL;
         if (!sp->subtitle()) {
@@ -58,12 +59,20 @@ int ImageSubHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSeria
         if (sp->serial() != pktSerial
                 || (sp2 && pts > sp2->startPts())
                 || (!sp2 && pts > sp->endPts())) {
+            // New subtitle change
             mQueue->pushNext();
             mInvalidate = true;
         } else {
-            if (pts >= sp->startPts()) {
+            if (pts >= sp->startPts() && (mInvalidate || force)) {
                 AVSubtitle* sub = sp->subtitle();
                 if (sub->format == 0 /* graphics */) {
+                    if (sub->num_rects == 0 && mInvalidate) {
+                        // No subtitles shown
+                        mInvalidate = false;
+                        ret = 1;
+                    }
+
+                    // Blend each subtitle rect to the frame
                     for (int i = 0; i < sub->num_rects; i++) {
                         // Add a new frame cache that is needed to hold subtitles
                         if (mFrameCache.size() <= i) {
@@ -81,9 +90,8 @@ int ImageSubHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSeria
 
                         // Subtitle needs to be reconverted and resized to cached image
                         if (mInvalidate) {
-                            int ret = prepareSubFrame(sub->rects[i], cache, vFrame->width,
-                                                      vFrame->height);
-                            if (ret < 0) {
+                            if ((ret = prepareSubFrame(sub->rects[i], cache, vFrame->width,
+                                                       vFrame->height)) < 0) {
                                 return ret;
                             }
 
@@ -97,6 +105,7 @@ int ImageSubHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSeria
                                 }
                             }
                             mInvalidate = false;
+                            ret = 1;
                         }
                         blendFrames(vFrame, tmpFrame, cache.x, cache.y);
                     }
@@ -108,7 +117,7 @@ int ImageSubHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSeria
             break;
         }
     }
-    return 0;
+    return ret;
 }
 
 bool ImageSubHandler::handleDecodedSubtitle(AVSubtitle *subtitle, intptr_t pktSerial) {
@@ -159,6 +168,7 @@ void ImageSubHandler::blendFrames(AVFrame *dstFrame, AVFrame *srcFrame, int srcX
             dest_b = pixel[0] & 0xff;
 
             // Pixel blending
+            dest_a = (((dest_a * (0xff - rect_a)) + (rect_a * rect_a)) / 0xff);
             dest_r = (((dest_r * (0xff - rect_a)) + (rect_r * rect_a)) / 0xff);
             dest_g = (((dest_g * (0xff - rect_a)) + (rect_g * rect_a)) / 0xff);
             dest_b = (((dest_b * (0xff - rect_a)) + (rect_b * rect_a)) / 0xff);
@@ -173,6 +183,10 @@ void ImageSubHandler::blendFrames(AVFrame *dstFrame, AVFrame *srcFrame, int srcX
 
 bool ImageSubHandler::areFramesPending() {
     return mQueue != NULL && mQueue->getNumRemaining() > 0;
+}
+
+void ImageSubHandler::invalidateFrame() {
+    mInvalidate = true;
 }
 
 int ImageSubHandler::prepareSubFrame(AVSubtitleRect* rect, FrameCache& cache, int vWidth,

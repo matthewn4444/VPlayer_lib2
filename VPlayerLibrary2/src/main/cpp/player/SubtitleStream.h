@@ -3,6 +3,7 @@
 
 #include <ass/ass.h>
 #include "StreamComponent.h"
+#include "SubtitleFrameQueue.h"
 
 // TODO make this base class, have SSA and image (pgs) subs into subclasses
 class SubtitleStream : public StreamComponent {
@@ -14,9 +15,10 @@ public:
         virtual ~SubtitleHandlerBase() {}
         virtual int open(AVCodecContext* cContext, AVFormatContext* fContext) = 0;
         virtual bool handleDecodedSubtitle(AVSubtitle *subtitle, intptr_t pktSerial) = 0;
-        virtual int blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial) = 0;
+        virtual int blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial, bool force) = 0;
         virtual AVSubtitle* getSubtitle() = 0;
         virtual bool areFramesPending() = 0;
+        virtual void invalidateFrame() = 0;
 
         const AVCodecID codec_id;
     };
@@ -24,7 +26,14 @@ public:
     SubtitleStream(AVFormatContext* context, AVPacket* flushPkt, ICallback* callback);
     virtual ~SubtitleStream();
 
-    int blendToFrame(AVFrame* vFrame, Clock* vclock);
+    // If subtitle stream is handling its own frame, use these functions to prepare and get it
+    int prepareSubtitleFrame(int64_t pts, double clockPts);
+    AVFrame* getPendingSubtitleFrame(int64_t pts);
+
+    // If you want to merge the subs into an existing frame use this
+    int blendToFrame(AVFrame* vFrame, double clockPts, bool force = false);
+
+    void setFrameSize(int width, int height);
 
 protected:
     int open() override;
@@ -36,7 +45,13 @@ protected:
     bool areFramesPending() override;
 
 private:
+    int ensureQueue();
+
     SubtitleHandlerBase* mHandler;
+    SubtitleFrameQueue* mFrameQueue;
+
+    int mPendingWidth;
+    int mPendingHeight;
 };
 
 #endif //SUBTITLESTREAM_H

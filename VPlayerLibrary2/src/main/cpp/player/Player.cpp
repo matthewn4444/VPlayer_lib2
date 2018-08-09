@@ -42,6 +42,8 @@ Player::Player() :
         mAudioStream(NULL),
         mSubtitleStream(NULL),
         mVideoRenderer(NULL),
+        mSubtitleFrameWidth(0),
+        mSubtitleFrameHeight(0),
         mFilepath(NULL),
         mShowVideo(true),
         mAbortRequested(false),
@@ -141,6 +143,16 @@ void Player::abort() {
     mAbortRequested = true;
     for (int i = 0; i < mAVComponents.size(); ++i) {
         mAVComponents[i]->abort();
+    }
+}
+
+void Player::setSubtitleFrameSize(int width, int height) {
+    if (width > 0 && height > 0) {
+        mSubtitleFrameWidth = width;
+        mSubtitleFrameHeight = height;
+        if (mSubtitleStream) {
+            mSubtitleStream->setFrameSize(width, height);
+        }
     }
 }
 
@@ -291,9 +303,23 @@ int Player::tOpenStreams(AVFormatContext *context) {
     }
     if (mShowVideo) {
         int aIndex = mAudioStream ? mAudioStream->getStreamIndex() : -1;
-        if (mSubtitleStream &&
-            (err = mSubtitleStream->pickBest(aIndex >= 0 ? aIndex : vIndex)) < 0) {
-            return error(err, "Cannot choose/open best subtitle stream");
+        if (mSubtitleStream) {
+            if ((err = mSubtitleStream->pickBest(aIndex >= 0 ? aIndex : vIndex)) < 0) {
+                return error(err, "Cannot choose/open best subtitle stream");
+            }
+            int width = mSubtitleFrameWidth;
+            int height = mSubtitleFrameHeight;
+
+            // Get the max width and height with video aspect ratio
+            if (mVideoStream) {
+                const float ratio = mVideoStream->getAspectRatio();
+                if ((float) width / height > ratio) {
+                    width = (int) (height * ratio);
+                } else {
+                    height = (int) (height / ratio);
+                }
+            }
+            mSubtitleStream->setFrameSize(width, height);
         }
     }
     return 0;

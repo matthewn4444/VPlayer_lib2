@@ -9,7 +9,8 @@ extern "C" {
 
 class IVideoRenderer {
 public:
-virtual int writeFrame(AVFrame *frame) = 0;
+virtual bool writeSubtitlesSeparately() = 0;
+virtual int writeFrame(AVFrame* videoFrame, AVFrame* subtitleFrame) = 0;
 virtual int renderFrame() = 0;
 };
 

@@ -96,17 +96,20 @@ int SSAHandler::open(AVCodecContext *cContext, AVFormatContext *fContext) {
     return 0;
 }
 
-int SSAHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial) {
+int SSAHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial, bool force) {
     ASS_Image* image;
+    int changed = 0;
+    ass_set_frame_size(mAssRenderer, vFrame->width, vFrame->height);
     {
         std::lock_guard<std::mutex> lk(mAssMutex);
-        ass_set_frame_size(mAssRenderer, vFrame->width, vFrame->height);
-        image = ass_render_frame(mAssRenderer, mAssTrack, (long long int) vFrame->pts, NULL);
+        image = ass_render_frame(mAssRenderer, mAssTrack, (long long int) vFrame->pts, &changed);
     }
-    for (; image != NULL; image = image->next) {
-        blendSSA(vFrame, image);
+    if (changed == 2 || force) {
+        for (; image != NULL; image = image->next) {
+            blendSSA(vFrame, image);
+        }
     }
-    return 0;
+    return changed == 2 ? 2 : 0;
 }
 
 AVSubtitle *SSAHandler::getSubtitle() {
@@ -116,6 +119,10 @@ AVSubtitle *SSAHandler::getSubtitle() {
 bool SSAHandler::areFramesPending() {
     // Does not process frames in libass
     return false;
+}
+
+void SSAHandler::invalidateFrame() {
+    // Is not used
 }
 
 bool SSAHandler::handleDecodedSubtitle(AVSubtitle* subtitle, intptr_t pktSerial) {
@@ -191,6 +198,12 @@ void SSAHandler::blendSSA(AVFrame *vFrame, const ASS_Image *subImage) {
     "umlal v0.8h, v13.8b, v8.8b\n"
     "uqrshrn v8.8b, v0.8h, #8\n"
 
+    // Compute alpha pixel data
+    "and v0.8b, v7.8b, v3.8b\n"
+    "umull v0.8h, v0.8b, v12.8b\n"
+    "umlal v0.8h, v13.8b, v11.8b\n"
+    "uqrshrn v11.8b, v0.8h, #8\n"
+
     // Write back to dst
     "st4 {v8.8b-v11.8b}, [x12], #32\n"
 
@@ -261,6 +274,12 @@ void SSAHandler::blendSSA(AVFrame *vFrame, const ASS_Image *subImage) {
     "vmlal.u8 q0, d13, d8\n"
     "vqrshrn.u16 d8, q0, #8\n"
 
+    // Compute alpha pixel data
+    "vand.u8 d0, d7, d3\n"
+    "vmull.u8 q0, d0, d12\n"
+    "vmlal.u8 q0, d13, d11\n"
+    "vqrshrn.u16 d11, q0, #8\n"
+
     // Write back to dst
     "vst4.8 {d8-d11}, [r9]\n"
 
@@ -276,7 +295,7 @@ void SSAHandler::blendSSA(AVFrame *vFrame, const ASS_Image *subImage) {
     "cmp r3, r6\n"
     "bgt yloop\n"
     :
-    : [color] "r" (&image->color), [dst] "r" (dst), [src] "r" (src),
+    : [color] "r" (&subImage->color), [dst] "r" (dst), [src] "r" (src),
         [srcHeight] "r" (srcHeight), [srcStride] "r" (srcStride) , [dstStride] "r" (dstStride)
     : "r0", "r1", "r2", "r3", "r4", "r5"
     );
@@ -312,6 +331,7 @@ void SSAHandler::blendSSA(AVFrame *vFrame, const ASS_Image *subImage) {
             dest_b = pixel[0] & 0xff;
 
             // Pixel blending
+	        dest_a = (((dest_a * (0xff - rect_a)) + (rect_a * rect_a))/0xff);
 	        dest_r = (((dest_r * (0xff - rect_a)) + (rect_r * rect_a))/0xff);
             dest_g = (((dest_g * (0xff - rect_a)) + (rect_g * rect_a))/0xff);
             dest_b = (((dest_b * (0xff - rect_a)) + (rect_b * rect_a))/0xff);

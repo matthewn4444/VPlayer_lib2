@@ -1,14 +1,22 @@
 package com.matthewn4444.vplayerlibrary2;
 
 import android.content.Context;
+import android.content.res.Resources;
+import android.graphics.PixelFormat;
 import android.support.annotation.IntDef;
+import android.support.annotation.MainThread;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.util.AttributeSet;
+import android.util.DisplayMetrics;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
+import android.widget.FrameLayout;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
-public class VPlayerView extends VPlayer2SurfaceView {
-
+public class VPlayerView extends FrameLayout {
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({AVMEDIA_TYPE_CONTAINER, AVMEDIA_TYPE_VIDEO, AVMEDIA_TYPE_AUDIO, AVMEDIA_TYPE_SUBTITLE})
@@ -18,16 +26,74 @@ public class VPlayerView extends VPlayer2SurfaceView {
     public static final int AVMEDIA_TYPE_AUDIO = 1;
     public static final int AVMEDIA_TYPE_SUBTITLE = 2;
 
-    public VPlayerView(Context context) {
+
+    private final SurfaceHolder.Callback mSurfaceCallback = new SurfaceHolder.Callback() {
+        private boolean mVideoSurfaceCreated;
+        private boolean mSubtitleSurfaceCreated;
+
+        @Override
+        public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+        }
+
+        @Override
+        public void surfaceCreated(SurfaceHolder holder) {
+            if (mVideoSurface.getHolder() == holder) {
+                mVideoSurfaceCreated = true;
+            }
+            if (mSubtitlesSurface.getHolder() == holder) {
+                mSubtitleSurfaceCreated = true;
+            }
+            if (mVideoSurfaceCreated && mSubtitleSurfaceCreated) {
+                mController.surfaceCreated(mVideoSurface.getHolder().getSurface(),
+                       mSubtitlesSurface.getHolder().getSurface());
+            }
+        }
+
+        @Override
+        public void surfaceDestroyed(SurfaceHolder holder) {
+            if (mVideoSurface.getHolder() == holder) {
+                mVideoSurfaceCreated = false;
+            }
+            if (mSubtitlesSurface.getHolder() == holder) {
+                mSubtitleSurfaceCreated = false;
+            }
+            mController.surfaceDestroyed();
+        }
+    };
+
+    private final SurfaceView mVideoSurface;
+    private final SurfaceView mSubtitlesSurface;
+
+    private VPlayer2NativeController mController;
+
+    public VPlayerView(@NonNull Context context) {
         this(context, null);
     }
 
-    public VPlayerView(Context context, AttributeSet attrs) {
+    public VPlayerView(@NonNull Context context, @Nullable AttributeSet attrs) {
         this(context, attrs, 0);
     }
 
-    public VPlayerView(Context context, AttributeSet attrs, int defStyle) {
-        super(context, attrs, defStyle);
+    public VPlayerView(@NonNull Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+        this(context, attrs, defStyleAttr, 0);
+    }
+
+    public VPlayerView(@NonNull Context context, @Nullable AttributeSet attrs, int defStyleAttr,
+                       int defStyleRes) {
+        super(context, attrs, defStyleAttr, defStyleRes);
+        mVideoSurface = new SurfaceView(context);
+        mSubtitlesSurface = new SurfaceView(context);
+        addView(mVideoSurface);
+        addView(mSubtitlesSurface);
+        mVideoSurface.getHolder().addCallback(mSurfaceCallback);
+        mSubtitlesSurface.getHolder().addCallback(mSurfaceCallback);
+        mVideoSurface.getHolder().setFormat(PixelFormat.RGBA_8888);
+        mSubtitlesSurface.setZOrderMediaOverlay(true);
+        mSubtitlesSurface.setZOrderOnTop(true);
+        mSubtitlesSurface.getHolder().setFormat(PixelFormat.RGBA_8888);
+
+        final DisplayMetrics dm = Resources.getSystem().getDisplayMetrics();
+        mController = new VPlayer2NativeController(dm.widthPixels, dm.heightPixels);
     }
 
     public void openFile(String filepath) {
@@ -36,5 +102,17 @@ public class VPlayerView extends VPlayer2SurfaceView {
 
     public void setListener(VPlayerListener listener) {
         mController.setListener(listener);
+    }
+
+    @MainThread
+    public void setSubtitleFrameSize(int width, int height) {
+        mController.internalSetSubtitleFrameSize(width, height);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        mController.onDestroy();
+        mController = null;
+        super.onDetachedFromWindow();
     }
 }
