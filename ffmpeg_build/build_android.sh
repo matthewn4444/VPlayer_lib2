@@ -40,6 +40,10 @@ TOOLCHAIN_ROOT=/tmp/android-toolchain/
 #       Quick way to enable all decoders and muxers, by default is off for video playback
 # ENABLE_ENCODING=yes
 
+#   Enable FontConfig
+#       Allow the FFMPEG and libass to use commands from fontconfig library.
+# ENABLE_FONTCONFIG=yes
+
 #   Enable Subtitles
 #       Disable to remove subtitles from the video
 BUILD_WITH_SUBS=yes
@@ -69,6 +73,10 @@ case $i in
     ;;
     --use-amr)
     ENABLE_AMR=yes
+    shift
+    ;;
+    --use-fontconfig)
+    ENABLE_FONTCONFIG=yes
     shift
     ;;
     --enable-encoding)
@@ -102,6 +110,7 @@ case $i in
     echo "  --use-h264                  build with h264 encoding library, uses GPL license"
     echo "  --use-amr                   build with Opencore AMR-NB/WB decoder/encoder, uses GPL license"
     echo "  --use-fdk-aac               build with fdk acc instead of ffmpeg's aac, uses GPL license"
+    echo "  --use-fontconfig            build with fontconfig used by FFMPEG and libass"
     echo "  --no-subs                   do not build with subs"
     echo
     echo "Optional build flags:"
@@ -321,7 +330,7 @@ function setup
 
     LINKER_LIBS=
     CFLAGS=$OPTIMIZE_CFLAGS
-    export LDFLAGS="-Wl,-rpath-link=$LINKER_FOLDER -L$LINKER_FOLDER $LIBGCC_LINK $LDFLAGS_EXTRA -lc -lm -ldl -llog -L$PREFIX/lib"
+    export LDFLAGS="-Wl,-rpath-link=$LINKER_FOLDER -L$LINKER_FOLDER $LIBGCC_LINK $LDFLAGS_EXTRA -lc -lm -ldl -L$PREFIX/lib"
     export CPPFLAGS="$CFLAGS"
     export CFLAGS="$CFLAGS"
     export CXXFLAGS="$CFLAGS"
@@ -429,6 +438,7 @@ function build_png
 }
 function build_freetype2
 {
+    ADDITIONAL_CONFIGURE_FLAG=$ADDITIONAL_CONFIGURE_FLAG" --enable-libfreetype"
     LINKER_LIBS="$LINKER_LIBS -lfreetype"
     cd freetype2
     ./configure \
@@ -449,18 +459,22 @@ function build_freetype2
 }
 function build_ass
 {
+    EXTRA_LIBASS_FLAGS=
+    if [ -z "$ENABLE_FONTCONFIG" ]; then
+        EXTRA_LIBASS_FLAGS=" --disable-fontconfig --disable-require-system-font-provider"
+    fi
+
     LINKER_LIBS="$LINKER_LIBS -lass"
     ADDITIONAL_CONFIGURE_FLAG=$ADDITIONAL_CONFIGURE_FLAG" --enable-libass"
     cd libass
     ./configure \
         --prefix=$PREFIX \
         --host=$HOST \
-        --disable-fontconfig \
         --disable-dependency-tracking \
-        --disable-require-system-font-provider \
         --disable-shared \
         --enable-static \
         --with-pic \
+        $EXTRA_LIBASS_FLAGS \
         $ADDITIONAL_CONFIGURE_FLAG \
         || exit 1
     make clean || exit 1
@@ -486,6 +500,85 @@ function build_fribidi
     make clean || exit 1
     make -j${JOBS} install || exit 1
     cd ..
+}
+
+function build_libuuid
+{
+    cd util-linux
+
+    # Android doesn't have a temp folder, doubt this will hit anyways, so use sdcard
+    replace_line '		tmpenv = _PATH_TMP' '		tmpenv = "\/sdcard\/"' "lib/fileutils.c"
+    LINKER_LIBS="$LINKER_LIBS -luuid"
+    ./configure \
+        --prefix=$PREFIX \
+        --host=$HOST \
+        --build=$ARCH-unknown-linux-gnu \
+        --with-sysroot=$SYSROOT \
+        --disable-dependency-tracking \
+        --disable-shared \
+        --disable-all-programs \
+        --enable-libuuid \
+        --enable-static \
+        --with-pic \
+        || exit 1
+    make clean || exit 1
+    make -j${JOBS} install || exit 1
+    replace_line '		tmpenv = "\/sdcard\/"' '		tmpenv = _PATH_TMP' "lib/fileutils.c"
+    cd ..
+}
+
+function build_libxml2
+{
+    export PATH=${PATH}:$PREBUILT/bin/
+    PKG_CONFIG=${CROSS_COMPILE}pkg-config
+    LINKER_LIBS="$LINKER_LIBS -lxml2"
+    cd libxml2
+    ./configure \
+        --prefix=$PREFIX \
+        --host=$HOST \
+        --build=$ARCH-unknown-linux-gnu \
+        --disable-dependency-tracking \
+        --without-python \
+        --with-sysroot=$SYSROOT \
+        --disable-shared \
+        --enable-static \
+        --with-pic \
+        || exit 1
+    make clean || exit 1
+    make -j${JOBS} install || exit 1
+    cd ..
+}
+
+function build_fontconfig
+{
+    if [ ! -z "$ENABLE_FONTCONFIG" ]; then
+        build_libuuid
+        build_libxml2
+
+        export PATH=${PATH}:$PREBUILT/bin/
+        PKG_CONFIG=${CROSS_COMPILE}pkg-config
+        ADDITIONAL_CONFIGURE_FLAG=$ADDITIONAL_CONFIGURE_FLAG" --enable-libfontconfig"
+        LINKER_LIBS="$LINKER_LIBS -lfontconfig"
+        cd fontconfig
+        ./configure \
+            --prefix=$PREFIX \
+            --host=$HOST \
+            --build=$ARCH-unknown-linux-gnu \
+            --disable-dependency-tracking \
+            --with-sysroot=$SYSROOT \
+            --enable-libxml2 \
+            --disable-docs \
+            --disable-nls \
+            --disable-shared \
+            --enable-static \
+            --with-pic \
+            || exit 1
+        replace_line '	conf.d its po po-conf test $(am__append_1)' '	conf.d its po po-conf $(am__append_1)' Makefile
+        make clean || exit 1
+        make -j${JOBS} install || exit 1        # TODO do we need second make?
+        replace_line '	conf.d its po po-conf $(am__append_1)' '	conf.d its po po-conf test $(am__append_1)' Makefile
+        cd ..
+    fi
 }
 
 function build_gnutls
@@ -596,7 +689,7 @@ EOF
         --extra-cflags=" -O3 -DANDROID -fpic -DHAVE_SYS_UIO_H=1 -Dipv6mr_interface=ipv6mr_ifindex -fasm -Wno-psabi -fno-short-enums  -fno-strict-aliasing -finline-limit=300 -I$PREFIX/include $OPTIMIZE_CFLAGS" \
         --disable-shared \
         --enable-static \
-        --extra-ldflags="-Wl,-rpath-link=$SYSROOT/usr/lib -L$SYSROOT/usr/lib -nostdlib -lc -lm -ldl -llog" \
+        --extra-ldflags="-Wl,-rpath-link=$SYSROOT/usr/lib -L$SYSROOT/usr/lib -nostdlib -lc -lm -lz -ldl -llog" \
         --disable-devices \
         --disable-doc \
         --disable-programs \
@@ -629,6 +722,7 @@ function build_subtitles
         build_fribidi
         build_png
         build_freetype2
+        build_fontconfig
         build_ass
     fi
 }

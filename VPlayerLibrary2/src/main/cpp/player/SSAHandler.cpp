@@ -5,13 +5,16 @@
 #endif
 
 static const char* sTag = "SSAHandler";
-static const char* sAssScriptHeader = "[Script Info]";
 static const char *sFontMimeTypes[] = {
         "application/x-font-ttf",
         "application/x-truetype-font",
         "application/vnd.ms-opentype",
         "application/x-font"
 };
+
+static void ass_log(int ass_level, const char *fmt, va_list args, void *ctx) {
+  //    _log(fmt, args);
+}
 
 static int isFontAttachment(const AVStream * st) {
     const AVDictionaryEntry *tag = av_dict_get(st->metadata, "mimetype", NULL, AV_DICT_MATCH_CASE);
@@ -55,6 +58,7 @@ int SSAHandler::open(AVCodecContext *cContext, AVFormatContext *fContext) {
         __android_log_print(ANDROID_LOG_ERROR, sTag, "Cannot allocate ass library");
         return AVERROR(ENOMEM);
     }
+    ass_set_message_cb(mAssLibrary, ass_log, NULL);
 
     mAssRenderer = ass_renderer_init(mAssLibrary);
     if (!mAssRenderer) {
@@ -84,14 +88,13 @@ int SSAHandler::open(AVCodecContext *cContext, AVFormatContext *fContext) {
             }
         }
     }
-    ass_set_fonts(mAssRenderer, NULL, NULL, 1, NULL, 1);
+    ass_set_extract_fonts(mAssLibrary, true);
+    ass_set_fonts( mAssRenderer, NULL, NULL, ASS_FONTPROVIDER_AUTODETECT, NULL, 1 );
 
     // Set the subtitle header
-    if (cContext->subtitle_header_size > 13 && cContext->subtitle_header) {
-        if (!strncasecmp((char*) cContext->subtitle_header, sAssScriptHeader, 13)) {
-            ass_process_data(mAssTrack, (char*) cContext->subtitle_header,
-                             cContext->subtitle_header_size);
-        }
+    if (cContext->subtitle_header) {
+        ass_process_codec_private(mAssTrack, (char *) cContext->subtitle_header,
+                                  cContext->subtitle_header_size);
     }
     return 0;
 }
@@ -110,6 +113,12 @@ int SSAHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial, bo
         }
     }
     return changed == 2 ? 2 : 0;
+}
+
+void SSAHandler::setDefaultFont(const char *fontPath, const char *fontFamily) {
+    if (mAssRenderer && fontPath && fontFamily) {
+        ass_set_fonts(mAssRenderer, fontPath, fontFamily, ASS_FONTPROVIDER_AUTODETECT, NULL, 1);
+    }
 }
 
 AVSubtitle *SSAHandler::getSubtitle() {

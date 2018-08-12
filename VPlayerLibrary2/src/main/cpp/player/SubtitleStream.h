@@ -16,6 +16,7 @@ public:
         virtual int open(AVCodecContext* cContext, AVFormatContext* fContext) = 0;
         virtual bool handleDecodedSubtitle(AVSubtitle *subtitle, intptr_t pktSerial) = 0;
         virtual int blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial, bool force) = 0;
+        virtual void setDefaultFont(const char* fontPath, const char* fontFamily) = 0;
         virtual AVSubtitle* getSubtitle() = 0;
         virtual bool areFramesPending() = 0;
         virtual void invalidateFrame() = 0;
@@ -34,6 +35,7 @@ public:
     int blendToFrame(AVFrame* vFrame, double clockPts, bool force = false);
 
     void setFrameSize(int width, int height);
+    void setDefaultFont(const char* fontPath, const char* fontFamily);
 
 protected:
     int open() override;
@@ -52,6 +54,9 @@ private:
 
     int mPendingWidth;
     int mPendingHeight;
+
+    const char* mPendingFontPath;
+    const char* mPendingFontFamily;
 };
 
 #endif //SUBTITLESTREAM_H

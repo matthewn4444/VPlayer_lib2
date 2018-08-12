@@ -144,14 +144,28 @@ extern "C" JNIEXPORT void JAVA_EXPORT_NAME(surfaceDestroyed) (JNIEnv *env, jobje
     }
 }
 
-extern "C" JNIEXPORT void JAVA_EXPORT_NAME(setSubtitleFrameSize) (JNIEnv *env, jobject instance,
-                                                                jint width, jint height) {
+extern "C" JNIEXPORT void JAVA_EXPORT_NAME(nativeSetSubtitleFrameSize) (JNIEnv *env,
+                                                                        jobject instance,
+                                                                        jint width, jint height) {
     Player* player = getPlayerPtr(env, instance);
     if (player) {
         player->setSubtitleFrameSize(width, height);
     }
 }
 
+extern "C" JNIEXPORT void JAVA_EXPORT_NAME(nativeSetDefaultSubtitleFont) (JNIEnv *env,
+                                                                          jobject instance,
+                                                                          jstring jfontPath,
+                                                                          jstring jfontFamily) {
+    Player* player = getPlayerPtr(env, instance);
+    if (player) {
+        const char *fontPath = env->GetStringUTFChars(jfontPath, 0);
+        const char *fontFamily = env->GetStringUTFChars(jfontFamily, 0);
+        player->setDefaultSubtitleFont(fontPath, fontFamily);
+        env->ReleaseStringUTFChars(jfontPath, fontPath);
+        env->ReleaseStringUTFChars(jfontFamily, fontFamily);
+    }
+}
 
 extern "C" JNIEXPORT jboolean JNICALL JAVA_EXPORT_NAME(nativeOpen) (JNIEnv *env, jobject instance,
                                                                    jstring streamFileUrl) {

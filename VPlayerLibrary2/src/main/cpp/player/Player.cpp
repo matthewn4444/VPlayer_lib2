@@ -61,6 +61,8 @@ Player::Player() :
     av_init_packet(&mFlushPkt);
     mFlushPkt.size = 0;
     mFlushPkt.data = (uint8_t *) &mFlushPkt;
+    mSubtitleFontPath[0] = '\0';
+    mSubtitleFontFamily[0] = '\0';
 }
 
 Player::~Player() {
@@ -153,6 +155,19 @@ void Player::setSubtitleFrameSize(int width, int height) {
         if (mSubtitleStream) {
             mSubtitleStream->setFrameSize(width, height);
         }
+    }
+}
+
+void Player::setDefaultSubtitleFont(const char *fontPath, const char *fontFamily) {
+    if (fontPath && fontFamily) {
+        strncpy(mSubtitleFontPath, fontPath, std::min(strlen(fontPath), MAX_STRING_LENGTH));
+        strncpy(mSubtitleFontFamily, fontFamily, std::min(strlen(fontFamily), MAX_STRING_LENGTH));
+        if (mSubtitleStream) {
+            mSubtitleStream->setDefaultFont(mSubtitleFontPath, mSubtitleFontFamily);
+        }
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, sTag,
+                            "Cannot set default font, family or path is null");
     }
 }
 
@@ -320,6 +335,9 @@ int Player::tOpenStreams(AVFormatContext *context) {
                 }
             }
             mSubtitleStream->setFrameSize(width, height);
+
+            // Set the default font for subtitles
+            mSubtitleStream->setDefaultFont(mSubtitleFontPath, mSubtitleFontFamily);
         }
     }
     return 0;

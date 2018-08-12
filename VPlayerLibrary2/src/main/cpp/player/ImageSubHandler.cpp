@@ -120,6 +120,10 @@ int ImageSubHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSeria
     return ret;
 }
 
+void ImageSubHandler::setDefaultFont(const char *fontPath, const char *fontFamily) {
+    // Not used
+}
+
 bool ImageSubHandler::handleDecodedSubtitle(AVSubtitle *subtitle, intptr_t pktSerial) {
     Frame* sp;
     if (!(sp = mQueue->peekWritable())) {

@@ -16,6 +16,8 @@ public:
 
     int blendToFrame(double pts, AVFrame *frame, intptr_t pktSerial, bool force = false) override;
 
+    void setDefaultFont(const char *fontPath, const char *fontFamily) override;
+
     bool areFramesPending() override;
 
     void invalidateFrame() override;

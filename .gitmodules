@@ -31,3 +31,12 @@
 [submodule "ffmpeg_build/x264"]
 	path = ffmpeg_build/x264
 	url = git://git.videolan.org/x264.git
+[submodule "ffmpeg_build/fontconfig"]
+	path = ffmpeg_build/fontconfig
+	url = https://anongit.freedesktop.org/git/fontconfig
+[submodule "ffmpeg_build/util-linux"]
+	path = ffmpeg_build/util-linux
+	url = https://git.kernel.org/pub/scm/utils/util-linux/util-linux.git
+[submodule "ffmpeg_build/libxml2"]
+	path = ffmpeg_build/libxml2
+	url = https://gitlab.gnome.org/GNOME/libxml2.git

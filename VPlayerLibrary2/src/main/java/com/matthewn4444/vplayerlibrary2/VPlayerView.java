@@ -9,14 +9,17 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.widget.FrameLayout;
 
+import java.io.File;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
 public class VPlayerView extends FrameLayout {
+    private static final String TAG = "VPlayerView";
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({AVMEDIA_TYPE_CONTAINER, AVMEDIA_TYPE_VIDEO, AVMEDIA_TYPE_AUDIO, AVMEDIA_TYPE_SUBTITLE})
@@ -106,7 +109,16 @@ public class VPlayerView extends FrameLayout {
 
     @MainThread
     public void setSubtitleFrameSize(int width, int height) {
-        mController.internalSetSubtitleFrameSize(width, height);
+        mController.setSubtitleFrameSize(width, height);
+    }
+
+    public void setDefaultSubtitleFont(String fontPath, String fontFamily) {
+        if (new File(fontPath).exists()) {
+            mController.nativeSetDefaultSubtitleFont(fontPath, fontFamily);
+        } else {
+            Log.i(TAG, String.format("Subtitle '%s' does not exist on path '%s'", fontFamily,
+                    fontPath));
+        }
     }
 
     @Override

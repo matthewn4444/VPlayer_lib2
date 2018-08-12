@@ -12,10 +12,10 @@ import android.os.SystemClock;
 import android.support.annotation.MainThread;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Surface;
 
+import java.io.File;
 import java.util.Map;
 
 public class VPlayer2NativeController {
@@ -40,6 +40,11 @@ public class VPlayer2NativeController {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
                     ? AudioFormat.CHANNEL_OUT_7POINT1_SURROUND : AudioFormat.CHANNEL_OUT_7POINT1
     };
+
+    private static final String DEFAULT_FONT_DROID_PATH = "/system/fonts/DroidSans-Bold.ttf";
+    private static final String DEFAULT_FONT_DROID_NAME = "Droid Sans Bold";
+    private static final String DEFAULT_FONT_NOTO_PATH = "/system/fonts/NotoSansCJK-Regular.ttc";
+    private static final String DEFAULT_FONT_NOTO_NAME = "Noto Sans";
 
     private static final long SEND_SUBTITLE_FRAME_SIZE_TIMEOUT = 300;
 
@@ -76,13 +81,20 @@ public class VPlayer2NativeController {
         public void run() {
             mWaitingToSendSubtitleSize = false;
             mLastTimeSentSubtitleSize = SystemClock.currentThreadTimeMillis();
-            setSubtitleFrameSize(mPendingSubtitleWidth, mPendingSubtitleHeight);
+            nativeSetSubtitleFrameSize(mPendingSubtitleWidth, mPendingSubtitleHeight);
         }
     };
 
     VPlayer2NativeController(int displayWidth, int displayHeight) {
         if (initPlayer()) {
-            setSubtitleFrameSize(displayWidth, displayHeight);
+            nativeSetSubtitleFrameSize(displayWidth, displayHeight);
+
+            // Check for default font
+            if (new File(DEFAULT_FONT_NOTO_PATH).exists()) {
+                nativeSetDefaultSubtitleFont(DEFAULT_FONT_NOTO_PATH, DEFAULT_FONT_NOTO_NAME);
+            } else {
+                nativeSetDefaultSubtitleFont(DEFAULT_FONT_DROID_PATH, DEFAULT_FONT_DROID_NAME);
+            }
         } else {
             mHasInitError = true;
         }
@@ -127,7 +139,7 @@ public class VPlayer2NativeController {
     }
 
     @MainThread
-    public void internalSetSubtitleFrameSize(int width, int height) {
+    public void setSubtitleFrameSize(int width, int height) {
         mPendingSubtitleWidth = width;
         mPendingSubtitleHeight = height;
 
@@ -238,7 +250,9 @@ public class VPlayer2NativeController {
 
     private native boolean nativeOpen(String streamFileUrl);
 
-    private native void setSubtitleFrameSize(int width, int height);
+    private native void nativeSetSubtitleFrameSize(int width, int height);
+
+    native void nativeSetDefaultSubtitleFont(String fontPath, String fontFamily);
 
     public native void surfaceCreated(@NonNull Surface videoSurface, @Nullable Surface subSurface);
 

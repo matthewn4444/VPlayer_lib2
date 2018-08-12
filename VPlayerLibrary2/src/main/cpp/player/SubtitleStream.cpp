@@ -19,7 +19,9 @@ SubtitleStream::SubtitleStream(AVFormatContext* context, AVPacket* flushPkt, ICa
         mHandler(NULL),
         mFrameQueue(NULL),
         mPendingWidth(0),
-        mPendingHeight(0) {
+        mPendingHeight(0),
+        mPendingFontPath(NULL),
+        mPendingFontFamily(NULL) {
 }
 
 SubtitleStream::~SubtitleStream() {
@@ -67,6 +69,10 @@ AVFrame *SubtitleStream::getPendingSubtitleFrame(int64_t pts) {
 
 int SubtitleStream::blendToFrame(AVFrame *vFrame, double clockPts, bool force) {
     if (mHandler) {
+        if (mPendingFontPath && mPendingFontFamily) {
+            mHandler->setDefaultFont(mPendingFontPath, mPendingFontFamily);
+        }
+        mPendingFontPath = mPendingFontFamily = NULL;
         return mHandler->blendToFrame(clockPts, vFrame, mPacketQueue->serial(), force);
     }
     return 0;
@@ -88,6 +94,11 @@ void SubtitleStream::setFrameSize(int width, int height) {
     if (mFrameQueue == NULL) {
         mFrameQueue = new SubtitleFrameQueue();
     }
+}
+
+void SubtitleStream::setDefaultFont(const char *fontPath, const char *fontFamily) {
+    mPendingFontPath = fontPath;
+    mPendingFontFamily = fontFamily;
 }
 
 int SubtitleStream::open() {

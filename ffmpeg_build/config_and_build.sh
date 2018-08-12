@@ -28,6 +28,18 @@ cd freetype2
 sh ./autogen.sh
 cd ..
 
+cd util-linux
+sh ./autogen.sh
+cd ..
+
+cd libxml2
+sh ./autogen.sh
+cd ..
+
+cd fontconfig
+sh ./autogen.sh
+cd ..
+
 # GMP needed by gnutls and nettle
 if [ ! -d gmp ]; then
     VER=6.1.2

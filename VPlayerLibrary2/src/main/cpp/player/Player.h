@@ -1,6 +1,8 @@
 #ifndef VPLAYER_LIB2_PLAYER_H
 #define VPLAYER_LIB2_PLAYER_H
 
+#define MAX_STRING_LENGTH (size_t) 256
+
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
@@ -47,6 +49,7 @@ public:
     }
 
     void setSubtitleFrameSize(int width, int height);
+    void setDefaultSubtitleFont(const char* fontPath, const char* fontFamily);
 
     void setCallback(IPlayerCallback *callback);
 private:
@@ -70,8 +73,12 @@ private:
     SubtitleStream* mSubtitleStream;
     // TODO handle attachments
 
+    // Subtitle variables
     int mSubtitleFrameWidth;
     int mSubtitleFrameHeight;
+    char mSubtitleFontPath[MAX_STRING_LENGTH];
+    char mSubtitleFontFamily[MAX_STRING_LENGTH];
+
     IVideoRenderer* mVideoRenderer;
     IPlayerCallback* mCallback;
     std::condition_variable mReadThreadCondition;
