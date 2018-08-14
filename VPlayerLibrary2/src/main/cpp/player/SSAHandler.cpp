@@ -316,8 +316,8 @@ void SSAHandler::blendSSA(AVFrame *vFrame, const ASS_Image *subImage) {
             (uint8_t) ((0xFF - subImage->color) & 0xFF)
     };
 
-    uint8_t rect_r, rect_g, rect_b, rect_a;
-    int dest_r, dest_g, dest_b, dest_a;
+    uint8_t srcR, srcG, srcB, srcA;
+    int dstR, dstG, dstB, dstA;
     int x, y;
 
     for (y = 0; y < srcHeight; y++) {
@@ -325,28 +325,28 @@ void SSAHandler::blendSSA(AVFrame *vFrame, const ASS_Image *subImage) {
         uint8_t* src2 = src;
 
         for (x = 0; x < subImage->w; x++) {
-            uint8_t image_pixel = *(src2++);
-            uint32_t *pixel = (dst2++);
+            uint8_t srcPixel = *(src2++);
+            uint32_t *dstPixel = (dst2++);
 
             // Expand the subtitle pixel
-            rect_r = image_pixel & rgba_color[2];
-            rect_g = image_pixel & rgba_color[1];
-            rect_b = image_pixel & rgba_color[0];
-            rect_a = image_pixel & rgba_color[3];
+            srcR = srcPixel & rgba_color[2];
+            srcG = srcPixel & rgba_color[1];
+            srcB = srcPixel & rgba_color[0];
+            srcA = srcPixel & rgba_color[3];
 
-            dest_a = (pixel[0] >> 24) & 0xff;
-            dest_r = (pixel[0] >> 16) & 0xff;
-            dest_g = (pixel[0] >> 8) & 0xff;
-            dest_b = pixel[0] & 0xff;
+            dstA = (dstPixel[0] >> 24) & 0xff;
+            dstR = (dstPixel[0] >> 16) & 0xff;
+            dstG = (dstPixel[0] >> 8) & 0xff;
+            dstB = dstPixel[0] & 0xff;
 
             // Pixel blending
-	        dest_a = (((dest_a * (0xff - rect_a)) + (rect_a * rect_a))/0xff);
-	        dest_r = (((dest_r * (0xff - rect_a)) + (rect_r * rect_a))/0xff);
-            dest_g = (((dest_g * (0xff - rect_a)) + (rect_g * rect_a))/0xff);
-            dest_b = (((dest_b * (0xff - rect_a)) + (rect_b * rect_a))/0xff);
+	        dstA = (((dstA * (0xff - srcA)) + (srcA * srcA))/0xff);
+	        dstR = (((dstR * (0xff - srcA)) + (srcR * srcA))/0xff);
+            dstG = (((dstG * (0xff - srcA)) + (srcG * srcA))/0xff);
+            dstB = (((dstB * (0xff - srcA)) + (srcB * srcA))/0xff);
 
             // Write pixel back to frame
-            pixel[0] = (uint32_t) ((dest_a << 24) | (dest_r << 16) | (dest_g << 8) | dest_b);
+            dstPixel[0] = (uint32_t) ((dstA << 24) | (dstR << 16) | (dstG << 8) | dstB);
         }
         dst += dstStride;
         src += srcStride;
