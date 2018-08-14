@@ -142,7 +142,9 @@ int VideoStream::onProcessThread() {
 
         // Drop frames if allowed and falling behind master clock
         if (allowFrameDrops() && avFrame->pts != AV_NOPTS_VALUE) {
-            double diff = (av_q2d(stream->time_base) * avFrame->pts) - getMasterClock()->getPts();
+            double audioLatency = mCallback->getAudioLatency();
+            double diff = (av_q2d(stream->time_base) * avFrame->pts)
+                          - (getMasterClock()->getPts() - audioLatency);
             if (!isnan(diff) && diff < 0 && fabs(diff) < AV_COMP_NOSYNC_THRESHOLD
                     && mPktSerial == mClock->serial()
                     && mPacketQueue->numPackets()) {
@@ -311,7 +313,8 @@ int VideoStream::synchronizeVideo(double *remainingTime) {
             lastDuration = getFrameDurationDiff(lastvp, vp);
             delay = lastDuration;
             if (!isMasterClock) {
-                diff = mClock->getPts() - getMasterClock()->getPts();
+                double audioLatency = mCallback->getAudioLatency();
+                diff = mClock->getPts() - (getMasterClock()->getPts() - audioLatency);
 
                 // Skip or repeat frame from the threshold calculated with the delay or use
                 // best guess

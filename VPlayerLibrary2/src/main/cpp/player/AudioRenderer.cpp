@@ -1,5 +1,11 @@
 #include "AudioRenderer.h"
 
+#define SEC_TO_NS 1e9
+#define STABILIZING_MAX_COUNTER 5
+
+static const int64_t TIMESTAMP_STABILIZING_NS = 500 * (int64_t) 1e6;    // 500 ms in nanoseconds
+static const int64_t TIMESTAMP_POLLING_NS = 20 * (int64_t) SEC_TO_NS;   // 20 secs to poll in ns
+
 const static char *sTag = "Native-AudioTrack";
 
 const static int sAndroidChannelLayout[] = {
@@ -31,9 +37,19 @@ void AudioRenderer::initJni(JNIEnv *env) {
     sMethodAudioTrackFlush = getJavaMethod(env, clazz, sMethodAudioTrackFlushSpec);
     sMethodAudioTrackChannelCount = getJavaMethod(env, clazz, sMethodAudioTrackChannelCountSpec);
     sMethodAudioTrackGetSampleRate = getJavaMethod(env, clazz, sMethodAudioTrackGetSampleRateSpec);
+    sMethodAudioTrackGetTimestamp = getJavaMethod(env, clazz, sMethodAudioTrackGetTimestampSpec);
+    sMethodAudioTrackGetLatency = getJavaMethod(env, clazz, sMethodAudioTrackGetLatencySpec);
     sMethodAudioTrackStop = getJavaMethod(env, clazz, sMethodAudioTrackStopSpec);
     sMethodAudioTrackRelease = getJavaMethod(env, clazz, sMethodAudioTrackReleaseSpec);
     env->DeleteLocalRef(clazz);
+
+    // AudioTimestamp class
+    const jclass tsClazz = env->FindClass(sAudioTimestampClassName);
+    sMethodAudioTimeStampCtor = getJavaMethod(env, tsClazz, sMethodAudioTimestampCtorSpec);
+    sFieldAudioTimestampFramePosition =
+            getJavaField(env, tsClazz, sFieldAudioTimestampFrmPositionSpec);
+    sFieldAudioTimestampNanoTime = getJavaField(env, tsClazz, sFieldAudioTimestampNanoTimeSpec);
+    env->DeleteLocalRef(tsClazz);
 }
 
 AudioRenderer::AudioRenderer(JniCallbackHandler *handler, jobject jAudioTrack, JNIEnv* env) :
@@ -42,7 +58,18 @@ AudioRenderer::AudioRenderer(JniCallbackHandler *handler, jobject jAudioTrack, J
         mSampleRate(0),
         mLayout(0),
         mFormat(AV_SAMPLE_FMT_NONE),
-        instance(jAudioTrack) {
+        instance(jAudioTrack),
+        mFramesWritten(0),
+        mUseTimestampApi(true),
+        mLastFramePosition(0),
+        mLastFrameTime(0),
+        mLastLatencySec(0),
+        mLastTimestampCheck(0),
+        mTimestampStabilizing(true),
+        mStabilizingCounter(0),
+        mOldHeadTimeSmoothArr(NULL),
+        mOldHeadTimeSmoothArrSize(0),
+        mOldHeadTimeSmoothArrIndex(0) {
     mChannels = env->CallIntMethod(instance, sMethodAudioTrackChannelCount);
     if (0 < mChannels && mChannels < 9) {
         mSampleRate = env->CallIntMethod(instance, sMethodAudioTrackGetSampleRate);
@@ -56,6 +83,9 @@ AudioRenderer::AudioRenderer(JniCallbackHandler *handler, jobject jAudioTrack, J
 }
 
 AudioRenderer::~AudioRenderer() {
+    if (mOldHeadTimeSmoothArr) {
+        delete[] mOldHeadTimeSmoothArr;
+    }
 }
 
 int AudioRenderer::write(uint8_t *data, int len) {
@@ -76,6 +106,7 @@ int AudioRenderer::write(uint8_t *data, int len) {
     env->ReleaseByteArrayElements(jArr, jSamples, 0);
     int ret = env->CallIntMethod(instance, sMethodAudioTrackWrite, jArr, 0, len);
     env->DeleteLocalRef(jArr);
+    mFramesWritten += ret / (numChannels() * av_get_bytes_per_sample(format()));
     return ret;
 }
 
@@ -96,6 +127,7 @@ int AudioRenderer::play() {
         return -1;
     }
     env->CallVoidMethod(instance, sMethodAudioTrackPlay);
+    // TODO is mTimestampStabilizing = true needed here?, check the timestamp again
     return 0;
 }
 
@@ -119,11 +151,99 @@ int AudioRenderer::stop() {
     return 0;
 }
 
-#define _log(...) __android_log_print(ANDROID_LOG_INFO, "VPlayer2Native", __VA_ARGS__);
-
-
 int AudioRenderer::release(JNIEnv* env) {
     std::lock_guard<std::mutex> lk(mMutex);
     env->CallVoidMethod(instance, sMethodAudioTrackRelease);
     return 0;
+}
+
+double AudioRenderer::getLatency() {
+    return mLastLatencySec;
+}
+
+double AudioRenderer::updateLatency(bool force) {
+    std::lock_guard<std::mutex> lk(mMutex);
+    int64_t now = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    long framePos = 0;
+    long timestamp = 0;
+
+    JNIEnv* env = mJniHandler->getEnv();
+    if (!env) {
+        return -1;
+    }
+
+    // Update latency if passed the timeout threshold either in stabilizing or polling mode
+    int64_t threshold = mTimestampStabilizing ? TIMESTAMP_STABILIZING_NS : TIMESTAMP_POLLING_NS;
+    if (now - mLastTimestampCheck > threshold || force) {
+        mLastTimestampCheck = now;
+
+        if (!mUseTimestampApi) {
+            // Already confirmed this audio sample cannot use getTimestamp(), use old method
+            mTimestampStabilizing = false;
+            return getLatencyOldMethod();
+        }
+
+        // If the unable to getTimestamp, time or position is the same as before, clock is
+        // stabilizing so wait shorter periods of time until getTimestamp is stabilized
+        if (!getTimeStamp(&framePos, &timestamp) || mLastFrameTime == timestamp || timestamp <= 0
+                || mLastFramePosition == framePos || mLastFramePosition < 0) {
+            mTimestampStabilizing = true;
+            __android_log_print(ANDROID_LOG_VERBOSE, sTag, "Audio timestamp is stabilizing");
+
+            if (++mStabilizingCounter >= STABILIZING_MAX_COUNTER) {
+                __android_log_print(ANDROID_LOG_VERBOSE, sTag, "Taking too long to stabilize "
+                        "AudioTrack.getTimestamp, switching to old method.");
+                mUseTimestampApi = false;
+                return getLatencyOldMethod();
+            }
+            return mLastLatencySec;
+        }
+        mStabilizingCounter = 0;
+        mTimestampStabilizing = false;
+        mLastFramePosition = framePos;
+        mLastFrameTime = timestamp;
+
+        // Calculate the latency compared to the data already written
+        double headPos = framePos + (now - timestamp) * mSampleRate / SEC_TO_NS;
+        mLastLatencySec = std::max((mFramesWritten - headPos) / mSampleRate, 0.0);
+        __android_log_print(ANDROID_LOG_VERBOSE, sTag,
+                            "Update audio latency [getTimestamp()] %lf ms", mLastLatencySec * 1000);
+    }
+    return mLastLatencySec;
+}
+
+bool AudioRenderer::getTimeStamp(long *outFramePosition, long *outNanoTime) {
+    JNIEnv* env = mJniHandler->getEnv();
+    if (!env) {
+        return false;
+    }
+    const jclass clazz = env->FindClass(sAudioTimestampClassName);
+    jobject timestamp = env->NewObject(clazz, sMethodAudioTimeStampCtor);
+    env->DeleteLocalRef(clazz);
+    if (!timestamp) {
+        __android_log_print(ANDROID_LOG_ERROR, sTag, "Unable to create audio timestamp class!!");
+        return false;
+    }
+    jboolean res = env->CallBooleanMethod(instance, sMethodAudioTrackGetTimestamp, timestamp);
+    if (res == JNI_TRUE) {
+        if (outFramePosition) {
+            *outFramePosition = env->GetLongField(timestamp, sFieldAudioTimestampFramePosition);
+        }
+        if (outNanoTime) {
+            *outNanoTime = env->GetLongField(timestamp, sFieldAudioTimestampNanoTime);
+        }
+    }
+    env->DeleteLocalRef(timestamp);
+    return res == JNI_TRUE;
+}
+
+double AudioRenderer::getLatencyOldMethod() {
+    JNIEnv* env = mJniHandler->getEnv();
+    if (!env) {
+        return -1;
+    }
+    mLastLatencySec = (double) env->CallIntMethod(instance, sMethodAudioTrackGetLatency) / 1000.0;
+    __android_log_print(ANDROID_LOG_VERBOSE, sTag,
+                        "Update audio latency [reflect:getLatency] %lf ms", mLastLatencySec * 1000);
+    return mLastLatencySec;
 }

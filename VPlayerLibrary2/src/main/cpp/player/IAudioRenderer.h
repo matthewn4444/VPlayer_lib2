@@ -15,6 +15,13 @@ public:
     virtual int sampleRate() = 0;
     virtual int64_t layout() = 0;
     virtual enum AVSampleFormat format() = 0;
+
+    /**
+     * Get the audio latency when writing to be displayed in seconds
+     * @return latency in seconds
+     */
+    virtual double getLatency() = 0;
+    virtual double updateLatency(bool force = false) = 0;
 };
 
 #endif //IAUDIORENDERER_H

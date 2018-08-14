@@ -41,7 +41,9 @@ static jmethodID sMethodStreamReady;
 static jmethodID sMethodStreamFinished;
 
 jfieldID getJavaField(JNIEnv *env, jclass clazz, JavaField field);
+jfieldID getStaticJavaField(JNIEnv *env, jclass clazz, JavaField field);
 jmethodID getJavaMethod(JNIEnv *env, jclass clazz, JavaMethod method);
+jmethodID getStaticJavaMethod(JNIEnv *env, jclass clazz, JavaMethod method);
 
 class AudioRenderer;
 
@@ -66,7 +68,7 @@ public:
     void onStreamReady() override;
     void onStreamFinished() override;
 
-    IAudioRenderer *getAudioRenderer(AVCodecContext* context) override;
+    IAudioRenderer *createAudioRenderer(AVCodecContext *context) override;
 
     bool onThreadStart() override;
     void onThreadEnd() override;

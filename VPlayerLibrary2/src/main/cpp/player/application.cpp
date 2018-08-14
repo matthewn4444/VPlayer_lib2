@@ -167,6 +167,14 @@ extern "C" JNIEXPORT void JAVA_EXPORT_NAME(nativeSetDefaultSubtitleFont) (JNIEnv
     }
 }
 
+extern "C" JNIEXPORT void JNICALL JAVA_EXPORT_NAME(remeasureAudioLatency) (JNIEnv *env,
+                                                                           jobject instance) {
+    Player* player = getPlayerPtr(env, instance);
+    if (player != NULL) {
+        player->remeasureAudioLatency();
+    }
+}
+
 extern "C" JNIEXPORT jboolean JNICALL JAVA_EXPORT_NAME(nativeOpen) (JNIEnv *env, jobject instance,
                                                                    jstring streamFileUrl) {
     Player* player = getPlayerPtr(env, instance);

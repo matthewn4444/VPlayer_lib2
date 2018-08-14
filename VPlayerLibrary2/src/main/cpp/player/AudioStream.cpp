@@ -17,6 +17,7 @@ AudioStream::AudioStream(AVFormatContext* context, AVPacket* flushPkt, ICallback
         mAudioBuffer(NULL),
         mBufferSize(0),
         mStartPts(AV_NOPTS_VALUE),
+        mLatencyInvalidated(false),
         mIsMuted(false),
         mDiffComputation(0),
         mDiffAvgCoef(exp(log(0.01) / AUDIO_DIFF_AVG_NB)),
@@ -39,6 +40,14 @@ AudioStream::~AudioStream() {
     if (mAudioBuffer) {
         av_freep(&mAudioBuffer);
     }
+}
+
+void AudioStream::invalidateLatency() {
+    mLatencyInvalidated = true;
+}
+
+double AudioStream::getLatency() {
+    return mAudioRenderer ? mAudioRenderer->getLatency() : 0;
 }
 
 AVDictionary *AudioStream::getPropertiesOfStream(AVCodecContext* cContext, AVStream* stream,
@@ -103,7 +112,7 @@ int AudioStream::onProcessThread() {
 }
 
 int AudioStream::onRenderThread() {
-    if ((mAudioRenderer = mCallback->getAudioRenderer(mCContext)) == NULL) {
+    if ((mAudioRenderer = mCallback->createAudioRenderer(mCContext)) == NULL) {
         return error(AVERROR(ENOMEM), "Cannot create audio renderer");
     }
 
@@ -164,6 +173,8 @@ int AudioStream::onRenderThread() {
             if (!isnan(frame->pts())) {
                 getClock()->setTimeAt(frame->pts(), frameDecodeStart, frame->serial());
                 getExternalClock()->syncToClock(getClock());
+                mAudioRenderer->updateLatency(mLatencyInvalidated);
+                mLatencyInvalidated = false;
             }
         }
     }

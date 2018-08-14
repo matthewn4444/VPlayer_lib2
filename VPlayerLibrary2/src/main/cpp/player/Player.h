@@ -35,7 +35,9 @@ public:
     void setVideoRenderer(IVideoRenderer* videoRenderer);
 
     void togglePlayback() override;
-    IAudioRenderer *getAudioRenderer(AVCodecContext* context) override;
+    IAudioRenderer *createAudioRenderer(AVCodecContext *context) override;
+    double getAudioLatency() override;
+
     Clock* getMasterClock() override;
     Clock* getExternalClock() override;
 
@@ -52,6 +54,8 @@ public:
     void setDefaultSubtitleFont(const char* fontPath, const char* fontFamily);
 
     void setCallback(IPlayerCallback *callback);
+
+    void remeasureAudioLatency();
 private:
     void reset();
     void sleepMs(long ms);

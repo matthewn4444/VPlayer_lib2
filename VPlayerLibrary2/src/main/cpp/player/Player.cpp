@@ -106,8 +106,12 @@ void Player::togglePlayback() {
     mIsPaused = mExtClock.paused = !mIsPaused;
 }
 
-IAudioRenderer *Player::getAudioRenderer(AVCodecContext* context) {
-    return mCallback->getAudioRenderer(context);
+IAudioRenderer *Player::createAudioRenderer(AVCodecContext *context) {
+    return mCallback->createAudioRenderer(context);
+}
+
+double Player::getAudioLatency() {
+    return mAudioStream ? mAudioStream->getLatency() : 0;
 }
 
 Clock *Player::getMasterClock() {
@@ -177,6 +181,12 @@ void Player::setCallback(IPlayerCallback *callback) {
 
     for (int i = 0; i < mAVComponents.size(); i++) {
         mAVComponents[i]->setCallback(callback);
+    }
+}
+
+void Player::remeasureAudioLatency() {
+    if (mAudioStream) {
+        mAudioStream->invalidateLatency();
     }
 }
 
@@ -569,4 +579,3 @@ int Player::sendMetadataReady(AVFormatContext *context) {
 void Player::sleepMs(long ms) {
     std::this_thread::sleep_for((std::chrono::milliseconds(ms)));
 }
-

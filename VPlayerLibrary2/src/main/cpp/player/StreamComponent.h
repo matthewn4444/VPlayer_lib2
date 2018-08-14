@@ -18,7 +18,8 @@ public:
     class ICallback {
     public:
         virtual void abort() = 0;
-        virtual IAudioRenderer* getAudioRenderer(AVCodecContext* context) = 0;
+        virtual IAudioRenderer* createAudioRenderer(AVCodecContext *context) = 0;
+        virtual double getAudioLatency() = 0;
         virtual Clock* getMasterClock() = 0;
         virtual Clock* getExternalClock() = 0;
         virtual void updateExternalClockSpeed() = 0;

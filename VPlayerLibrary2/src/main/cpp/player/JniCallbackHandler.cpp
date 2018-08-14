@@ -9,8 +9,16 @@ jfieldID getJavaField(JNIEnv* env, jclass clazz, JavaField field) {
     return env->GetFieldID(clazz, field.name, field.signature);
 }
 
+jfieldID getStaticJavaField(JNIEnv* env, jclass clazz, JavaField field) {
+    return env->GetStaticFieldID(clazz, field.name, field.signature);
+}
+
 jmethodID getJavaMethod(JNIEnv *env, jclass clazz, JavaMethod method) {
     return env->GetMethodID(clazz, method.name, method.signature);
+}
+
+jmethodID getStaticJavaMethod(JNIEnv *env, jclass clazz, JavaMethod method) {
+    return env->GetStaticMethodID(clazz, method.name, method.signature);
 }
 
 void JniCallbackHandler::initJni(JNIEnv *env) {
@@ -216,7 +224,7 @@ void JniCallbackHandler::onStreamFinished() {
     env->CallVoidMethod(mInstance, sMethodStreamFinished);
 }
 
-IAudioRenderer *JniCallbackHandler::getAudioRenderer(AVCodecContext* context) {
+IAudioRenderer *JniCallbackHandler::createAudioRenderer(AVCodecContext *context) {
     JNIEnv* env = getEnv();
     std::lock_guard<std::mutex> lk(mMutex);
     jobject audioTrack = env->CallObjectMethod(mInstance, sMethodCreateAudioTrack,

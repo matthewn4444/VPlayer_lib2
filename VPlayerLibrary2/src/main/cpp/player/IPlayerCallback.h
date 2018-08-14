@@ -40,7 +40,7 @@ public:
 
     virtual void onStreamFinished() = 0;
 
-    virtual IAudioRenderer* getAudioRenderer(AVCodecContext* context) = 0;
+    virtual IAudioRenderer* createAudioRenderer(AVCodecContext *context) = 0;
 
     virtual bool onThreadStart() = 0;
 

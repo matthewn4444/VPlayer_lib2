@@ -3,6 +3,7 @@ package com.matthewn4444.vplayerlibrary2;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
 import android.media.AudioManager;
+import android.media.AudioRouting;
 import android.media.AudioTrack;
 import android.os.AsyncTask;
 import android.os.Build;
@@ -41,6 +42,8 @@ public class VPlayer2NativeController {
                     ? AudioFormat.CHANNEL_OUT_7POINT1_SURROUND : AudioFormat.CHANNEL_OUT_7POINT1
     };
 
+    private static final boolean AT_LEAST_N = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N;
+
     private static final String DEFAULT_FONT_DROID_PATH = "/system/fonts/DroidSans-Bold.ttf";
     private static final String DEFAULT_FONT_DROID_NAME = "Droid Sans Bold";
     private static final String DEFAULT_FONT_NOTO_PATH = "/system/fonts/NotoSansCJK-Regular.ttc";
@@ -66,6 +69,8 @@ public class VPlayer2NativeController {
     @SuppressWarnings("unused") // Constant for JNI video renderer
     private long mNativeJniVideoRendererInstance;
 
+    private AudioTrack mAudioTrack;
+
     private VPlayerListener mListener;
     private boolean mStreamReady;
     private boolean mHasInitError;
@@ -84,6 +89,14 @@ public class VPlayer2NativeController {
             nativeSetSubtitleFrameSize(mPendingSubtitleWidth, mPendingSubtitleHeight);
         }
     };
+
+    private final AudioRouting.OnRoutingChangedListener mRoutingChangedListener =
+            new AudioRouting.OnRoutingChangedListener() {
+                @Override
+                public void onRoutingChanged(AudioRouting router) {
+                    remeasureAudioLatency();
+                }
+            };
 
     VPlayer2NativeController(int displayWidth, int displayHeight) {
         if (initPlayer()) {
@@ -130,6 +143,10 @@ public class VPlayer2NativeController {
     }
 
     public void onDestroy() {
+        if (AT_LEAST_N && mAudioTrack != null) {
+            mAudioTrack.removeOnRoutingChangedListener(mRoutingChangedListener);
+            mAudioTrack = null;
+        }
         AsyncTask.execute(new Runnable() {
             @Override
             public void run() {
@@ -201,13 +218,16 @@ public class VPlayer2NativeController {
     }
 
     private AudioTrack nativeCreateAudioTrack(int sampleRateHz, int numOfChannels) {
+        if (AT_LEAST_N && mAudioTrack != null) {
+            mAudioTrack.removeOnRoutingChangedListener(mRoutingChangedListener);
+        }
         for (;;) {
             int channelConfig = numOfChannels < sAudioChannels.length
                     ? sAudioChannels[numOfChannels] : AudioFormat.CHANNEL_OUT_STEREO;
             try {
                 int minBufferSize = AudioTrack.getMinBufferSize(sampleRateHz,
                         channelConfig, AudioFormat.ENCODING_PCM_16BIT);
-                return new AudioTrack(
+                mAudioTrack = new AudioTrack(
                         new AudioAttributes.Builder()
                                 .setUsage(AudioAttributes.USAGE_MEDIA)
                                 .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
@@ -219,6 +239,10 @@ public class VPlayer2NativeController {
                                 .build(),
                         minBufferSize, AudioTrack.MODE_STREAM,
                         AudioManager.AUDIO_SESSION_ID_GENERATE);
+                if (AT_LEAST_N) {
+                    mAudioTrack.addOnRoutingChangedListener(mRoutingChangedListener, mMainHandler);
+                }
+                return mAudioTrack;
             } catch (IllegalArgumentException e) {
                 // Back off number of channels if failed
                 if (numOfChannels > 2) {
@@ -253,6 +277,8 @@ public class VPlayer2NativeController {
     private native void nativeSetSubtitleFrameSize(int width, int height);
 
     native void nativeSetDefaultSubtitleFont(String fontPath, String fontFamily);
+
+    native void remeasureAudioLatency();
 
     public native void surfaceCreated(@NonNull Surface videoSurface, @Nullable Surface subSurface);
 

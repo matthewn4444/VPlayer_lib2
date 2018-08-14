@@ -5,6 +5,7 @@
 #include <mutex>
 #include "JniCallbackHandler.h"
 
+// AudioTrack
 static const char* sAudioTrackClassName = "android/media/AudioTrack";
 static JavaMethod sMethodAudioTrackWriteSpec = {"write", "([BII)I"};
 static JavaMethod sMethodAudioTrackPauseSpec = {"pause", "()V"};
@@ -14,14 +15,28 @@ static JavaMethod sMethodAudioTrackStopSpec = {"stop", "()V"};
 static JavaMethod sMethodAudioTrackReleaseSpec = {"release", "()V"};
 static JavaMethod sMethodAudioTrackChannelCountSpec = {"getChannelCount", "()I"};
 static JavaMethod sMethodAudioTrackGetSampleRateSpec = {"getSampleRate", "()I"};
+static JavaMethod sMethodAudioTrackGetLatencySpec = {"getLatency", "()I"};
+static JavaMethod sMethodAudioTrackGetTimestampSpec = {"getTimestamp",
+                                                       "(Landroid/media/AudioTimestamp;)Z"};
 static jmethodID sMethodAudioTrackWrite;
 static jmethodID sMethodAudioTrackPause;
 static jmethodID sMethodAudioTrackPlay;
 static jmethodID sMethodAudioTrackFlush;
 static jmethodID sMethodAudioTrackChannelCount;
 static jmethodID sMethodAudioTrackGetSampleRate;
+static jmethodID sMethodAudioTrackGetLatency;
+static jmethodID sMethodAudioTrackGetTimestamp;
 static jmethodID sMethodAudioTrackStop;
 static jmethodID sMethodAudioTrackRelease;
+
+// AudioTimestamp
+static const char* sAudioTimestampClassName = "android/media/AudioTimestamp";
+static JavaMethod sMethodAudioTimestampCtorSpec = {"<init>", "()V"};
+static JavaField sFieldAudioTimestampFrmPositionSpec = {"framePosition", "J"};
+static JavaField sFieldAudioTimestampNanoTimeSpec = {"nanoTime", "J"};
+static jmethodID sMethodAudioTimeStampCtor;
+static jfieldID sFieldAudioTimestampFramePosition;
+static jfieldID sFieldAudioTimestampNanoTime;
 
 class JniCallbackHandler;
 
@@ -56,8 +71,14 @@ public:
         return mFormat;
     }
 
+    double getLatency() override;
+    double updateLatency(bool force = false) override;
+
     jobject instance;
 private:
+    bool getTimeStamp(long* outFramePosition, long* outNanoTime);
+    double getLatencyOldMethod();
+
     std::mutex mMutex;
     JniCallbackHandler* mJniHandler;
 
@@ -66,6 +87,21 @@ private:
     jint mSampleRate;
     enum AVSampleFormat mFormat;
     int64_t mLayout;
+
+    // Calculate latency
+    long mFramesWritten;
+    bool mUseTimestampApi;
+    long mLastFramePosition;
+    long mLastFrameTime;
+    double mLastLatencySec;
+    int64_t mLastTimestampCheck;
+    bool mTimestampStabilizing;
+    short mStabilizingCounter;
+
+    // Old latency method
+    double* mOldHeadTimeSmoothArr;
+    int mOldHeadTimeSmoothArrSize;
+    int mOldHeadTimeSmoothArrIndex;
 };
 
 #endif //AUDIOTRACK_H
