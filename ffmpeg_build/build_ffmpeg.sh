@@ -100,7 +100,7 @@ case $i in
     shift
     ;;
     -h|--help)
-    echo "Usage: build_android.sh [options]"
+    echo "Usage: build_ffmpeg.sh [options]"
     echo "  Options here will override options from files it may read from"
     echo
     echo "Help options:"
@@ -146,7 +146,7 @@ elif [ -z "$NDK" ]; then
     echo "   Example: export NDK=/your/path/to/android-ndk"
     echo "   Or add your ndk path to ~/.bashrc"
     echo "   Or use --ndk=<path> with command"
-    echo "   Then run ./build_android.sh"
+    echo "   Then run ./build_ffmpeg.sh"
     exit 1
 fi
 
@@ -243,7 +243,7 @@ if [ ! -x "$GAS_PREPRO_PATH" ]; then
     chmod +x gas-preprocessor.pl
     mv gas-preprocessor.pl $GAS_PREPRO_PATH
     if  [ ! -x "$GAS_PREPRO_PATH" ]; then
-        echo "  Cannot move file, please run this script with permissions [ sudo -E ./build_android.sh ]"
+        echo "  Cannot move file, please run this script with permissions [ sudo -E ./build_ffmpeg.sh ]"
         exit 1
     fi
     echo "  Finished downloading gas-preprocessor.pl"
