@@ -1,6 +1,7 @@
 #include "StreamComponent.h"
 
 #define MIN_FRAMES 25
+#define MIN_CPU_COUNT 2
 
 const char *sTag = "StreamComponent";
 
@@ -152,6 +153,7 @@ int StreamComponent::open() {
         return ret;
     }
     mCContext->pkt_timebase = mFContext->streams[mStreamIndex]->time_base;
+    mCContext->thread_count = std::max((int) std::thread::hardware_concurrency(), MIN_CPU_COUNT);
 
     // TODO Enable to see if this helps anything for speedup, non complient as a setting
     // TODO see if we want to use avcodec_open2 options => threads(auto), refcounted_frames(1)
