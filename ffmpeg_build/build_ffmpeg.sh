@@ -50,6 +50,7 @@ BUILD_WITH_SUBS=yes
 
 #
 # =======================================================================
+BUILD_ALL=true
 
 # Parse command line
 for i in "$@"
@@ -61,10 +62,7 @@ case $i in
     ;;
     -a=*|--arch=*)
     BUILD_ARCHS="${i#*=}"
-    if [[ " ${BUILD_ARCHS[*]} " == *" all_with_deprecated "* ]]; then
-        BUILD_ALL_WITH_DEPS=true
-        BUILD_ALL=true
-    fi
+    BUILD_ALL=false
     shift
     ;;
     --use-h264)
@@ -125,7 +123,7 @@ case $i in
     echo "                              this will override the setting in ../VPlayerLibrary2/build.gradle"
     echo "                              of the first match of line 'abiFilters'"
     echo "                              options include arm64-v8a, x86, x86_64, armeabi-v7a"
-    echo "                              'all' would built allarchitectures using clang"
+    echo "                              leaving empty will build all architectures using clang"
     exit 1
     shift
     ;;
@@ -187,8 +185,6 @@ else
     # Check for architecture inputs are correct
     if [ -z $BUILD_ALL ]; then
         if [[ " ${BUILD_ARCHS[*]} " != *" armeabi-v7a "* ]] \
-               && [[ " ${BUILD_ARCHS[*]} " != *" armeabi "* ]] \
-               && [[ " ${BUILD_ARCHS[*]} " != *" mips "* ]] \
                && [[ " ${BUILD_ARCHS[*]} " != *" x86 "* ]] \
                && [[ " ${BUILD_ARCHS[*]} " != *" x86_64 "* ]] \
                && [[ " ${BUILD_ARCHS[*]} " != *" arm64-v8a "* ]]; then
@@ -701,7 +697,7 @@ EOF
 #        try  --disable-runtime-cpudetect if it plays?
 #        try  --enable-small
     make clean || exit 1
-    make -j${JOBS} || exit 1
+    make -j${JOBS}
     make -j${JOBS} install || exit 1
     cd ..
     LINKER_LIBS="$LINKER_LIBS -lavcodec -lavformat -lavutil -lswresample -lswscale"
