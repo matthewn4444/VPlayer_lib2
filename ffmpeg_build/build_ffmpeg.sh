@@ -701,6 +701,7 @@ EOF
 #        try  --disable-runtime-cpudetect if it plays?
 #        try  --enable-small
     make clean || exit 1
+    make -j${JOBS} || exit 1
     make -j${JOBS} install || exit 1
     cd ..
     LINKER_LIBS="$LINKER_LIBS -lavcodec -lavformat -lavutil -lswresample -lswscale"

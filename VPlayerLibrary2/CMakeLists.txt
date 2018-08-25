@@ -14,6 +14,20 @@ set_target_properties(lib_ffmpeg PROPERTIES IMPORTED_LOCATION
 
 include_directories(${ffmpeg_DIR}/include)
 
+
+# Libyuv, used for 444 to argb conversion, ffmpeg's implementation is not accelerated
+set( libyuv_DIR ${cpp_DIR}/thirdparty/libyuv )
+set( libyuv_BDIR ${libyuv_DIR}/output )
+
+file(MAKE_DIRECTORY ${libyuv_BDIR})
+add_subdirectory(${libyuv_DIR} ${libyuv_BDIR})
+add_library( lib_yuv STATIC IMPORTED )
+set_target_properties( lib_yuv PROPERTIES IMPORTED_LOCATION
+                       ${libyuv_BDIR}/libyuv.a )
+
+include_directories( ${libyuv_DIR}/include )
+
+
 add_definitions(-DCONFIG_RTSP_DEMUXER)
 
 add_library(application SHARED
@@ -30,6 +44,8 @@ add_library(application SHARED
               src/main/cpp/player/SubtitleStream.cpp
               src/main/cpp/player/SSAHandler.cpp
               src/main/cpp/player/ImageSubHandler.cpp
+              src/main/cpp/player/BasicYUVConverter.cpp
+              src/main/cpp/player/YUV16to8Converter.cpp
               src/main/cpp/player/Frame.cpp
               src/main/cpp/player/FrameQueue.cpp
               src/main/cpp/player/PacketQueue.cpp
@@ -42,4 +58,5 @@ add_library(application SHARED
 target_link_libraries(application
                         android
                         lib_ffmpeg
+                        lib_yuv
                         log )

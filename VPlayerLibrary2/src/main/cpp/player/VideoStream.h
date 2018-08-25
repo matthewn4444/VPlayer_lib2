@@ -3,16 +3,11 @@
 
 #define VIDEO_PIC_QUEUE_SIZE 3
 
-extern "C" {
-#include <libavutil/pixdesc.h>
-#include <libavutil/imgutils.h>
-#include <libswscale/swscale.h>
-}
-
 #include "AVComponentStream.h"
 #include "IVideoRenderer.h"
 #include "SubtitleStream.h"
 #include "AvFramePool.h"
+#include "YUV16to8Converter.h"
 
 class VideoStream : public AVComponentStream {
 public:
@@ -59,9 +54,8 @@ private:
     int mEarlyFrameDrops;
     int mLateFrameDrops;
     long mMaxFrameDuration;
-
     AvFramePool mFramePool;
-    struct SwsContext* mSwsContext;
+    BasicYUVConverter* mCSConverter;
 };
 
 #endif //VIDEOSTREAM_H

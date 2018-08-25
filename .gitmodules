@@ -40,3 +40,6 @@
 [submodule "ffmpeg_build/libxml2"]
 	path = ffmpeg_build/libxml2
 	url = https://gitlab.gnome.org/GNOME/libxml2.git
+[submodule "VPlayerLibrary2/src/main/cpp/thirdparty/libyuv"]
+	path = VPlayerLibrary2/src/main/cpp/thirdparty/libyuv
+	url = https://chromium.googlesource.com/libyuv/libyuv

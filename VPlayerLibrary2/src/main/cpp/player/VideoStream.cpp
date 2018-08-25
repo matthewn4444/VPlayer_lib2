@@ -27,13 +27,13 @@ VideoStream::VideoStream(AVFormatContext* context, AVPacket* flushPkt, ICallback
         mEarlyFrameDrops(0),
         mMaxFrameDuration(0),
         mLateFrameDrops(0),
-        mSwsContext(NULL) {
+        mCSConverter(NULL) {
 }
 
 VideoStream::~VideoStream() {
-    if (mSwsContext) {
-        sws_freeContext(mSwsContext);
-        mSwsContext = NULL;
+    if (mCSConverter) {
+        delete mCSConverter;
+        mCSConverter = NULL;
     }
 }
 
@@ -76,8 +76,58 @@ int VideoStream::open() {
 
     // Init the pool to fit the size of the video frames
     if ((ret = mFramePool.resize(mQueue->capacity(), mCContext->width, mCContext->height,
-                                AV_PIX_FMT_RGBA)) < 0) {
+                                 AV_PIX_FMT_RGBA)) < 0) {
         __android_log_print(ANDROID_LOG_ERROR, sTag, "Unable to create video frame pool");
+    }
+
+    // If higher than 8 bit, use a 16bit converter for faster conversion
+    const AVPixFmtDescriptor *descriptor = av_pix_fmt_desc_get(mCContext->pix_fmt);
+    if (mCSConverter) {
+        delete mCSConverter;
+        mCSConverter = NULL;
+    }
+    if (descriptor->comp->depth > 8) {
+        if (mCSConverter) {
+            delete mCSConverter;
+        }
+
+        // Only handling basic 10, 12 and 16 bit YUV data
+        // 16 bit and big endian are untested, assuming from docs it will work, ffmpeg cannot encode
+        // either options to test
+        switch (mCContext->pix_fmt) {
+            case AV_PIX_FMT_YUV420P16BE:
+            case AV_PIX_FMT_YUV420P16LE:
+            case AV_PIX_FMT_YUV420P10BE:
+            case AV_PIX_FMT_YUV420P10LE:
+            case AV_PIX_FMT_YUV420P12BE:
+            case AV_PIX_FMT_YUV420P12LE:
+                mCSConverter = new YUV16to8Converter(mCContext, AV_PIX_FMT_YUV420P);
+                break;
+            case AV_PIX_FMT_YUV422P16BE:
+            case AV_PIX_FMT_YUV422P16LE:
+            case AV_PIX_FMT_YUV422P10BE:
+            case AV_PIX_FMT_YUV422P10LE:
+            case AV_PIX_FMT_YUV422P12BE:
+            case AV_PIX_FMT_YUV422P12LE:
+                mCSConverter = new YUV16to8Converter(mCContext, AV_PIX_FMT_YUV422P);
+                break;
+            case AV_PIX_FMT_YUV444P16BE:
+            case AV_PIX_FMT_YUV444P16LE:
+            case AV_PIX_FMT_YUV444P10BE:
+            case AV_PIX_FMT_YUV444P10LE:
+            case AV_PIX_FMT_YUV444P12LE:
+            case AV_PIX_FMT_YUV444P12BE:
+                mCSConverter = new YUV16to8Converter(mCContext, AV_PIX_FMT_YUV444P);
+                break;
+            default:
+                __android_log_print(ANDROID_LOG_WARN, sTag,
+                                    "Cannot process 9-16 bit of pix format %s, using slow routine",
+                                    av_get_pix_fmt_name(mCContext->pix_fmt));
+                break;
+        }
+    }
+    if (mCSConverter == NULL) {
+        mCSConverter = new BasicYUVConverter();
     }
     return ret;
 }
@@ -127,7 +177,7 @@ int VideoStream::onProcessThread() {
     }
     spawnRendererThreadIfHaveNot();
 
-    while(1) {
+    while (1) {
         // Get current frame and until error or abort
         if ((ret = decodeFrame(avFrame)) < 0) {
             if (ret != AVERROR_EXIT) {
@@ -138,6 +188,7 @@ int VideoStream::onProcessThread() {
             // Not enough packets to make a frame
             continue;
         }
+
         avFrame->sample_aspect_ratio = av_guess_sample_aspect_ratio(mFContext, stream, avFrame);
 
         // Drop frames if allowed and falling behind master clock
@@ -151,7 +202,9 @@ int VideoStream::onProcessThread() {
                 mEarlyFrameDrops++;
                 __android_log_print(ANDROID_LOG_VERBOSE, sTag,
                                     "Early frame drop happened (Count: %d)", mEarlyFrameDrops);
-                mSubStream->getPendingSubtitleFrame(avFrame->pts);
+                if (mSubStream) {
+                    mSubStream->getPendingSubtitleFrame(avFrame->pts);
+                }
                 av_frame_unref(avFrame);
                 continue;
             }
@@ -248,21 +301,12 @@ int VideoStream::processVideoFrame(AVFrame* avFrame, AVFrame** outFrame) {
     tmpFrame->pkt_pos = avFrame->pkt_pos;
     tmpFrame->sample_aspect_ratio = avFrame->sample_aspect_ratio;
 
-    mSwsContext = sws_getCachedContext(mSwsContext, avFrame->width, avFrame->height,
-                                       (enum AVPixelFormat) avFrame->format, avFrame->width,
-                                       avFrame->height, AV_PIX_FMT_RGBA, SWS_BICUBIC, NULL, NULL,
-                                       NULL);
-
-    if (!mSwsContext) {
-        __android_log_print(ANDROID_LOG_ERROR, sTag, "Cannot allocate conversion context");
-        return AVERROR(EINVAL);
-    }
-    if ((ret = sws_scale(mSwsContext, (const uint8_t *const *) avFrame->data, avFrame->linesize, 0,
-                         avFrame->height, tmpFrame->data, tmpFrame->linesize)) < 0) {
-        __android_log_print(ANDROID_LOG_ERROR, sTag, "Cannot convert frame to rgba");
+    // Convert the frame to rgba
+    if ((ret = mCSConverter->convert(avFrame, tmpFrame)) < 0) {
         return ret;
     }
 
+    // Process the subtitle frame if it exists
     if (!hasAborted() && mSubStream) {
         const double clockPts = getClock()->getPts();
         if (mVideoRenderer != NULL && mVideoRenderer->writeSubtitlesSeparately()) {
@@ -284,7 +328,7 @@ int VideoStream::synchronizeVideo(double *remainingTime) {
     double lastDuration, duration, delay, diff, syncThres, now;
     const bool isMasterClock = getClock() == getMasterClock();
 
-    while(1) {
+    while (1) {
         if (mQueue->getNumRemaining() > 0) {
             Frame *vp, *lastvp;
 
@@ -359,7 +403,9 @@ int VideoStream::synchronizeVideo(double *remainingTime) {
                     __android_log_print(ANDROID_LOG_VERBOSE, sTag,
                                         "Late frame drop happened (Count: %d)", mLateFrameDrops);
                     mQueue->pushNext();
-                    mSubStream->getPendingSubtitleFrame(vp->frame()->pts);
+                    if (mSubStream) {
+                        mSubStream->getPendingSubtitleFrame(vp->frame()->pts);
+                    }
                     mFramePool.recycle(vp->frame());
                     continue;
                 }
