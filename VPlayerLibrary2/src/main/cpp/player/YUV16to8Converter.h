@@ -7,6 +7,7 @@ extern "C" {
 };
 
 #include "BasicYUVConverter.h"
+#include "convert.h"
 
 class YUV16to8Converter : public BasicYUVConverter {
 public:
@@ -17,12 +18,15 @@ public:
 
 protected:
     virtual bool reduceYUV16to8bit(AVFrame *srcFrame, AVFrame *dstFrame);
-    void reduce16BitChannelDepth(uint16_t *src, uint8_t *dst, int srcStride, int dstStride,
-                                 int width, int height, bool isBigEndian, int scaleFactor);
+    void reduce16BitChannelDepth(const uint16_t *src, uint8_t *dst, size_t srcStride,
+                                 size_t dstStride, size_t width, size_t height);
 
     int mFrameBitDepth;
     bool mFrameBitsBigEndian;
     AVFrame* mTmpFrame;
+#if CONVERT_16_TO_8_ASM_ENABLED
+    bitconv::conv16_8_func mConversionFn;
+#endif
 };
 
 #endif //COLORSPACE16BITCONVERTER_H

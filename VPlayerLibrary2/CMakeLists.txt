@@ -43,6 +43,7 @@ add_library(application SHARED
               src/main/cpp/player/SubtitleFrameQueue.cpp
               src/main/cpp/player/SubtitleStream.cpp
               src/main/cpp/player/SSAHandler.cpp
+              src/main/cpp/player/convert.cpp
               src/main/cpp/player/ImageSubHandler.cpp
               src/main/cpp/player/BasicYUVConverter.cpp
               src/main/cpp/player/YUV16to8Converter.cpp
