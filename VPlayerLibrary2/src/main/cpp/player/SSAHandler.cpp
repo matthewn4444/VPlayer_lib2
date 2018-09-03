@@ -149,164 +149,157 @@ bool SSAHandler::handleDecodedSubtitle(AVSubtitle* subtitle, intptr_t pktSerial)
 
 void SSAHandler::blendSSA(AVFrame *vFrame, const ASS_Image *subImage) {
     uint8_t* dst = vFrame->data[0] + vFrame->linesize[0] * subImage->dst_y + subImage->dst_x * 4;
-    int dstStride = vFrame->linesize[0];
-    uint8_t* src = subImage->bitmap;
-    int srcHeight = subImage->h;
-    int srcStride = subImage->stride;
+    const uint8_t* src = subImage->bitmap;
+    const size_t width = (size_t) subImage->w;
+    const size_t height = (size_t) subImage->h;
+
+    // Calculate the distance between the end of one line to the start of the next
+    // libass stride is per pixel while AVFrame stride is by bytes
+    const size_t srcStrideOffset = (size_t) (subImage->stride - ceil(width / 8.0) * 8);
+    const size_t dstStrideOffset = (size_t) (vFrame->linesize[0] - (ceil(width / 8.0) * 8) * 4);
 
 #if __aarch64__
-    asm (
-    "mov x0, %x[color]\n"
-    "mov x1, %x[dst]\n"
-    "mov x2, %x[src]\n"
-    "mov x3, %x[srcHeight]\n"
-    "mov x4, %x[srcStride]\n"
-    "mov x5, %x[dstStride]\n"
+    asm volatile (
+        // Load 8 slots of 0xFF
+        "mov            w8, #0xFF                           \n"
+        "dup            v0.8b, w8                           \n"
 
-    // Load 8 slots of 0xFF
-    "mov w8, #0xFF\n"
-    "dup v2.8b, w8\n"
+        // Read color list [ARGB], load to vectors and inverse alpha
+        "ld4r           { v2.8b - v5.8b }, [%0]             \n"
+        "sub            v2.8b, v0.8b, v2.8b                 \n"
 
-    // Read color list, load to vectors and inverse alpha
-    "ld4r {v3.8b-v6.8b}, [x0]\n"                // Color mask [ARGB]
-    "sub v3.8b, v2.8b, v3.8b\n"
+        // For loop, count down the width
+        "1:                                                 \n"
+        "mov            x0, %3                              \n"
 
-    // For loop
-    "mov x9, #0\n"
-    "yloop:\n"
+        // Load the source and destination data [BGRA]
+        "2:                                                 \n"
+        "ld1            { v6.8b }, [%1], #8                 \n"
+        "ld4            { v7.8b - v10.8b }, [%2]            \n"
 
-    "mov x10, #0\n"
-    "madd x11, x9, x4, x2\n"                    // Source: src = y * srcStride + src
-    "madd x12, x9, x5, x1\n"                    // Dest:   dst = y * dstStride + dst
+        // Prepare the source alpha
+        "and            v11.8b, v6.8b, v2.8b                \n"     // Source alpha
+        "sub            v12.8b, v0.8b, v11.8b               \n"     // Source alpha inverse
 
-    "xloop:\n"
+        // Compute red pixel data
+        "and            v1.8b, v6.8b, v3.8b                 \n"
+        "umull          v1.8h, v1.8b, v11.8b                \n"     // v = source * alpha
+        "umlal          v1.8h, v12.8b, v9.8b                \n"     // v = v + (bg * alphaInv)
+        "uqrshrn        v9.8b, v1.8h, #8                    \n"     // v = v >> 8 or v = v / 256
 
-    // Load the source and destination data
-    "ld1 {v7.8b}, [x11], #8\n"                  // Source pointer
-    "ld4 {v8.8b-v11.8b}, [x12]\n"               // Destination pointer [BGRA]
+        // Compute green pixel data
+        "and            v1.8b, v6.8b, v4.8b                 \n"
+        "umull          v1.8h, v1.8b, v11.8b                \n"
+        "umlal          v1.8h, v12.8b, v8.8b                \n"
+        "uqrshrn        v8.8b, v1.8h, #8                    \n"
 
-    // Prepare the source alpha
-    "and v12.8b, v7.8b, v3.8b\n"                // Source alpha
-    "sub v13.8b, v2.8b, v12.8b\n"               // Source alpha inverse
+        // Compute blue pixel data
+        "and            v1.8b, v6.8b, v5.8b                 \n"
+        "umull          v1.8h, v1.8b, v11.8b                \n"
+        "umlal          v1.8h, v12.8b, v7.8b                \n"
+        "uqrshrn        v7.8b, v1.8h, #8                    \n"
 
-    // Compute red pixel data
-    "and v0.8b, v7.8b, v4.8b\n"
-    "umull v0.8h, v0.8b, v12.8b\n"              // v = source * alpha
-    "umlal v0.8h, v13.8b, v10.8b\n"             // v = v + (bg * alphaInv)
-    "uqrshrn v10.8b, v0.8h, #8\n"               // v = v >> 8 or v = v / 256
+        // Compute alpha pixel data
+        "and            v1.8b, v6.8b, v2.8b                 \n"
+        "umull          v1.8h, v1.8b, v11.8b                \n"
+        "umlal          v1.8h, v12.8b, v10.8b               \n"
+        "uqrshrn        v10.8b, v1.8h, #8                   \n"
 
-    // Compute green pixel data
-    "and v0.8b, v7.8b, v5.8b\n"
-    "umull v0.8h, v0.8b, v12.8b\n"
-    "umlal v0.8h, v13.8b, v9.8b\n"
-    "uqrshrn v9.8b, v0.8h, #8\n"
+        // Write back to dst
+        "st4            { v7.8b - v10.8b }, [%2], #32       \n"
 
-    // Compute blue pixel data
-    "and v0.8b, v7.8b, v6.8b\n"
-    "umull v0.8h, v0.8b, v12.8b\n"
-    "umlal v0.8h, v13.8b, v8.8b\n"
-    "uqrshrn v8.8b, v0.8h, #8\n"
+        // End loop, x = width; x > 0; x -= 8
+        "subs           x0, x0, #8                          \n"
+        "b.gt           2b                                  \n"
 
-    // Compute alpha pixel data
-    "and v0.8b, v7.8b, v3.8b\n"
-    "umull v0.8h, v0.8b, v12.8b\n"
-    "umlal v0.8h, v13.8b, v11.8b\n"
-    "uqrshrn v11.8b, v0.8h, #8\n"
-
-    // Write back to dst
-    "st4 {v8.8b-v11.8b}, [x12], #32\n"
-
-    // End loop, x < srcStride; x += 8
-    "add x10, x10, #8\n"
-    "cmp x4, x10\n"
-    "b.gt xloop\n"
-
-    // End loop, y < scrHeight; y++
-    "add x9, x9, #1\n"
-    "cmp x3, x9\n"
-    "b.gt yloop\n"
+        // End loop, y = height; y > 0; y--
+        // Add the offset to src/dst to get the next pixel
+        "add            %1, %1, %5                          \n"
+        "add            %2, %2, %6                          \n"
+        "subs           %4, %4, #1                          \n"
+        "b.gt           1b                                  \n"
     :
-    : [color] "r" (&subImage->color), [dst] "r" (dst), [src] "r" (src),
-    [srcHeight] "r" (srcHeight), [srcStride] "r" (srcStride) , [dstStride] "r" (dstStride)
-    : "x0", "x1", "x2", "x3", "x4", "x5"
+    :   "r" (&subImage->color),
+        "r" (src),
+        "r" (dst),
+        "r" (width),
+        "r" (height),
+        "r" (srcStrideOffset) ,
+        "r" (dstStrideOffset)
+    :   "memory", "cc", "x0",
+        "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12"
     );
 #elif __ARM_NEON__
-    asm (
-    "mov r0, %[color]\n"
-    "mov r1, %[dst]\n"
-    "mov r2, %[src]\n"
-    "mov r3, %[srcHeight]\n"
-    "mov r4, %[srcStride]\n"
-    "mov r5, %[dstStride]\n"
+    asm volatile (
+        // Load 8 slots of 0rFF
+        "mov            r0, #0xFF                           \n"
+        "vdup.8         d2, r0                              \n"
 
-    // Load 8 slots of 0rFF
-    "mov r6, #0xFF\n"
-    "vdup.8 d2, r6\n"
+        // Read color list [ARGB], load to vectors and inverse alpha
+        "vld4.8         { d3[] - d6[] }, [%0]               \n"
+        "vsub.u8        d3, d2, d3                          \n"
 
-    // Read color list, load to vectors and inverse alpha
-    "vld4.8 {d3[], d4[], d5[], d6[]}, [r0]\n"
-    "vsub.u8 d3, d2, d3\n"
+        // For loop, count down the width
+        "1:                                                 \n"
 
-    // For loop
-    "mov r6, #0\n"
-    "yloop:\n"
+        "mov            r0, %3                              \n"
 
-    "mov r7, #0\n"
-    "mla r8, r6, r4, r2\n"                      // Source: src = y * srcStride + src
-    "mla r9, r6, r5, r1\n"                      // Dest:   dst = y * dstStride + dst
+        // Load the source and destination data
+        "2:                                                 \n"
+        "vld1.8         { d7 }, [%1]!                       \n"
+        "vld4.8         { d8 - d11 }, [%2]                  \n"
 
-    "rloop:\n"
+        // Prepare the source alpha
+        "vand.u8        d12, d7, d3                         \n"     // Source alpha
+        "vsub.u8        d13, d2, d12                        \n"     // Source alpha inverse
 
-    // Load the source and destination data
-    "vld1.8 {d7}, [r8]\n"                       // Source pointer
-    "vld4.8 {d8-d11}, [r9]\n"                   // Destination pointer [BGRA]
+        // Compute red pixel data
+        "vand.u8        d1, d7, d4                          \n"
+        "vmull.u8       q0, d1, d12                         \n"     // v = source * alpha
+        "vmlal.u8       q0, d13, d10                        \n"     // v = v + (bg * alphaInv)
+        "vqrshrn.u16    d10, q0, #8                         \n"     // v = v >> 8 or v = v / 256
 
-    // Prepare the source alpha
-    "vand.u8 d12, d7, d3\n"                     // Source alpha
-    "vsub.u8 d13, d2, d12\n"                    // Source alpha inverse
+        // Compute green pixel data
+        "vand.u8        d1, d7, d5                          \n"
+        "vmull.u8       q0, d1, d12                         \n"
+        "vmlal.u8       q0, d13, d9                         \n"
+        "vqrshrn.u16    d9, q0, #8                          \n"
 
-    // Compute red pixel data
-    "vand.u8 d0, d7, d4\n"
-    "vmull.u8 q0, d0, d12\n"                    // v = source * alpha
-    "vmlal.u8 q0, d13, d10\n"                   // v = v + (bg * alphaInv)
-    "vqrshrn.u16 d10, q0, #8\n"                 // v = v >> 8 or v = v / 256
+        // Compute blue pixel data
+        "vand.u8        d1, d7, d6                          \n"
+        "vmull.u8       q0, d1, d12                         \n"
+        "vmlal.u8       q0, d13, d8                         \n"
+        "vqrshrn.u16    d8, q0, #8                          \n"
 
-    // Compute green pixel data
-    "vand.u8 d0, d7, d5\n"
-    "vmull.u8 q0, d0, d12\n"
-    "vmlal.u8 q0, d13, d9\n"
-    "vqrshrn.u16 d9, q0, #8\n"
+        // Compute alpha pixel data
+        "vand.u8        d1, d7, d3                          \n"
+        "vmull.u8       q0, d1, d12                         \n"
+        "vmlal.u8       q0, d13, d11                        \n"
+        "vqrshrn.u16    d11, q0, #8                         \n"
 
-    // Compute blue pixel data
-    "vand.u8 d0, d7, d6\n"
-    "vmull.u8 q0, d0, d12\n"
-    "vmlal.u8 q0, d13, d8\n"
-    "vqrshrn.u16 d8, q0, #8\n"
+        // Write back to dst
+        "vst4.8         { d8 - d11 }, [%2]!                 \n"
 
-    // Compute alpha pixel data
-    "vand.u8 d0, d7, d3\n"
-    "vmull.u8 q0, d0, d12\n"
-    "vmlal.u8 q0, d13, d11\n"
-    "vqrshrn.u16 d11, q0, #8\n"
+        // End loop, x = width; x > 0; x -= 8
+        "subs           r0, r0, #8                          \n"
+        "bgt            2b                                  \n"
 
-    // Write back to dst
-    "vst4.8 {d8-d11}, [r9]\n"
-
-    // End loop, x < srcStride; x += 4
-    "add r7, r7, #8\n"
-    "add r8, r8, #8\n"
-    "add r9, r9, #32\n"
-    "cmp r4, r7\n"
-    "bgt rloop\n"
-
-    // End loop, y < scrHeight; y++
-    "add r6, r6, #1\n"
-    "cmp r3, r6\n"
-    "bgt yloop\n"
+        // End loop, y = height; y > 0; y--
+        // Add the offset to src/dst to get the next pixel
+        "add            %1, %1, %5                          \n"
+        "add            %2, %2, %6                          \n"
+        "subs           %4, %4, #1                          \n"
+        "bgt            1b                                  \n"
     :
-    : [color] "r" (&subImage->color), [dst] "r" (dst), [src] "r" (src),
-        [srcHeight] "r" (srcHeight), [srcStride] "r" (srcStride) , [dstStride] "r" (dstStride)
-    : "r0", "r1", "r2", "r3", "r4", "r5"
+    :   "r" (&subImage->color),
+        "r" (src),
+        "r" (dst),
+        "r" (width),
+        "r" (height),
+        "r" (srcStrideOffset),
+        "r" (dstStrideOffset)
+    :   "memory", "cc", "r0",
+        "d0", "d1", "d2", "d4", "d5", "d6", "d7", "d8", "d9", "d10", "d11", "d12", "d13"
     );
 #else
     const uint8_t rgba_color[] = {
@@ -317,16 +310,16 @@ void SSAHandler::blendSSA(AVFrame *vFrame, const ASS_Image *subImage) {
     };
 
     uint8_t srcR, srcG, srcB, srcA;
-    int dstR, dstG, dstB, dstA;
-    int x, y;
+    size_t dstR, dstG, dstB, dstA;
+    size_t x, y;
 
-    for (y = 0; y < srcHeight; y++) {
-        uint32_t* dst2 = (uint32_t *) dst;
-        uint8_t* src2 = src;
+    for (y = height; y > 0; --y) {
+        const uint8_t* _src = src;
+        uint32_t* _dst = (uint32_t *) dst;
 
-        for (x = 0; x < subImage->w; x++) {
-            uint8_t srcPixel = *(src2++);
-            uint32_t *dstPixel = (dst2++);
+        for (x = width; x > 0; --x) {
+            uint8_t srcPixel = *(_src++);
+            uint32_t *dstPixel = _dst++;
 
             // Expand the subtitle pixel
             srcR = srcPixel & rgba_color[2];
@@ -348,8 +341,8 @@ void SSAHandler::blendSSA(AVFrame *vFrame, const ASS_Image *subImage) {
             // Write pixel back to frame
             dstPixel[0] = (uint32_t) ((dstA << 24) | (dstR << 16) | (dstG << 8) | dstB);
         }
-        dst += dstStride;
-        src += srcStride;
+        src += subImage->stride;
+        dst += vFrame->linesize[0];
     }
 #endif
 }
