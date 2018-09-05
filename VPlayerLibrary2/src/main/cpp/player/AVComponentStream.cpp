@@ -62,6 +62,10 @@ int AVComponentStream::onProcessThread() {
 }
 
 void AVComponentStream::spawnRenderThread() {
+    // Render thread can only spawn if decoding has already started
+    if (!hasStartedDecoding()) {
+        return;
+    }
     if (mRenderThread) {
         __android_log_print(ANDROID_LOG_WARN, sTag, "Render thread already running, wait for join.");
         mRenderThread->join();

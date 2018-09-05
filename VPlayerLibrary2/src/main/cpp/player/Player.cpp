@@ -318,7 +318,7 @@ int Player::tOpenStreams(AVFormatContext *context) {
         return err;
     }
 
-    // Open streams and start decoding
+    // Open streams for decoding
     if (mVideoStream && (err = mVideoStream->pickBest()) < 0) {
         return error(err, "Cannot choose/open best video stream");
     }
@@ -349,6 +349,11 @@ int Player::tOpenStreams(AVFormatContext *context) {
             // Set the default font for subtitles
             mSubtitleStream->setDefaultFont(mSubtitleFontPath, mSubtitleFontFamily);
         }
+    }
+
+    // Start decoding
+    for (StreamComponent *c : mAVComponents) {
+        c->startDecoding();
     }
     return 0;
 }

@@ -50,7 +50,7 @@ int StreamComponent::pickBest(int relativeStream) {
                             av_get_media_type_string(mType));
     } else if (index != mStreamIndex) {
         mStreamIndex = index;
-        return internalOpen();
+        return open();
     }
     return mStreamIndex >= 0 ? 0 : AVERROR_STREAM_NOT_FOUND;
 }
@@ -72,9 +72,19 @@ int StreamComponent::pickByIndex(int streamNumber, bool fromAllStreams) {
                             streamNumber, typeName());
     } else if (index != mStreamIndex) {
         mStreamIndex = index;
-        return internalOpen();
+        return open();
     }
     return mStreamIndex >= 0 ? 0 : AVERROR_STREAM_NOT_FOUND;
+}
+
+void StreamComponent::startDecoding() {
+    if (!hasStartedDecoding()) {
+        if (mStreamIndex != -1) {
+            mDecodingThread = new std::thread(&StreamComponent::internalProcessThread, this);
+        } else {
+            __android_log_print(ANDROID_LOG_WARN, sTag, "Cannot start decoding, invalid index");
+        }
+    }
 }
 
 void StreamComponent::setCallback(IPlayerCallback *callback) {
@@ -218,6 +228,10 @@ bool StreamComponent::hasAborted() {
     return mPacketQueue == NULL || mPacketQueue->hasAborted();
 }
 
+bool StreamComponent::hasStartedDecoding() {
+    return mDecodingThread != NULL;
+}
+
 int StreamComponent::getCodecInfo(int streamIndex, AVCodecContext **oCContext, AVCodec **oCodec) {
     if (streamIndex < 0 || streamIndex >= mFContext->nb_streams || *oCContext != NULL
         || *oCodec != NULL) {
@@ -315,14 +329,6 @@ int StreamComponent::decodeFrame(void *frame) {
 }
 
 void StreamComponent::onDecodeFlushBuffers() {
-}
-
-int StreamComponent::internalOpen() {
-    int ret = open();
-    if (ret >= 0) {
-        mDecodingThread = new std::thread(&StreamComponent::internalProcessThread, this);
-    }
-    return ret;
 }
 
 void StreamComponent::internalProcessThread() {
