@@ -59,7 +59,6 @@ public:
 
     double endPts();
 
-    bool hasUploaded;
     bool flipVertical;
 
 private:

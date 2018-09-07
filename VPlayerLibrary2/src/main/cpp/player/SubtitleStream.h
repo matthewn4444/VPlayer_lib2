@@ -28,7 +28,7 @@ public:
     virtual ~SubtitleStream();
 
     // If subtitle stream is handling its own frame, use these functions to prepare and get it
-    int prepareSubtitleFrame(int64_t pts, double clockPts);
+    int prepareSubtitleFrame(int64_t pts, double clockPts, bool force = false);
     AVFrame* getPendingSubtitleFrame(int64_t pts);
 
     // If you want to merge the subs into an existing frame use this

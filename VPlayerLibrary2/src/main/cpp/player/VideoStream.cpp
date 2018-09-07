@@ -19,6 +19,7 @@ VideoStream::VideoStream(AVFormatContext* context, AVPacket* flushPkt, ICallback
         AVComponentStream(context, AVMEDIA_TYPE_VIDEO, flushPkt, callback, VIDEO_PIC_QUEUE_SIZE),
         mFrameStepMode(false),
         mAllowDropFrames(true),
+        mInvalidateSubs(false),
         mNextFrameWritten(false),
         mVideoRenderer(NULL),
         mForceRefresh(false),
@@ -61,6 +62,11 @@ void VideoStream::setSubtitleComponent(SubtitleStream *stream) {
 
 void VideoStream::setSupportNetworkControls(bool flag) {
     mCanSupportNetworkControls = flag;
+}
+
+void VideoStream::invalidNextFrame() {
+    mNextFrameWritten = false;
+    mInvalidateSubs = true;
 }
 
 bool VideoStream::allowFrameDrops() {
@@ -243,20 +249,21 @@ int VideoStream::onRenderThread() {
     int ret;
     double remainingTime = 0;
     while (!hasAborted()) {
-        waitIfRenderPaused();
-
         if (remainingTime > 0.0) {
 //            _log("Wait video thread %lf", remainingTime);
             std::this_thread::sleep_for(
                     (std::chrono::microseconds((int64_t) (remainingTime * AV_TIME_BASE))));
         }
+
+        waitIfRenderPaused();
+
         remainingTime = REFRESH_RATE;
-        if (!isPaused() || mForceRefresh) {
+        if (!isPaused()) {
             if (isRealTime() && getMasterClock() == getExternalClock()) {
                 mCallback->updateExternalClockSpeed();
             }
-
             synchronizeVideo(&remainingTime);
+
             bool readyToRender = mForceRefresh && mQueue->isReadIndexShown();
 
             // Write frame to renderer before render time (or at render time) to avoid extra delay
@@ -278,20 +285,17 @@ int VideoStream::onRenderThread() {
 
             // Display the video frame
             if (readyToRender) {
-                Frame* vp = mQueue->peekLast();
-                if (!vp->hasUploaded) {
-                    if (mVideoRenderer) {
-                        if ((ret = mVideoRenderer->renderFrame()) < 0) {
-                            return error(ret, "Was not able to reader video frame");
-                        }
-                    } else {
-                        __android_log_print(ANDROID_LOG_ERROR, sTag,
-                                            "No video renderer exists to render to screen");
+                Frame *vp = mQueue->peekLast();
+                if (mVideoRenderer) {
+                    if ((ret = mVideoRenderer->renderFrame()) < 0) {
+                        return error(ret, "Was not able to reader video frame");
                     }
-                    mNextFrameWritten = false;
-                    vp->hasUploaded = true;
-                    vp->flipVertical = vp->frame()->linesize[0] < 0;
+                } else {
+                    __android_log_print(ANDROID_LOG_ERROR, sTag,
+                                        "No video renderer exists to render to screen");
                 }
+                mNextFrameWritten = false;
+                vp->flipVertical = vp->frame()->linesize[0] < 0;
 
                 // Frame has been rendered and used, recycle it
                 mFramePool.recycle(vp->frame());
@@ -318,7 +322,7 @@ int VideoStream::processVideoFrame(AVFrame* avFrame, AVFrame** outFrame) {
     if (!hasAborted() && mSubStream) {
         const double clockPts = getClock()->getPts();
         if (mVideoRenderer != NULL && mVideoRenderer->writeSubtitlesSeparately()) {
-            if (mSubStream->prepareSubtitleFrame(avFrame->pts, clockPts) < 0) {
+            if (mSubStream->prepareSubtitleFrame(avFrame->pts, clockPts, mInvalidateSubs) < 0) {
                 __android_log_print(ANDROID_LOG_WARN, sTag, "Failed to prepare subtitle frames");
             }
         } else {
@@ -328,6 +332,7 @@ int VideoStream::processVideoFrame(AVFrame* avFrame, AVFrame** outFrame) {
             }
         }
     }
+    mInvalidateSubs = false;
     *outFrame = tmpFrame;
     return 0;
 }

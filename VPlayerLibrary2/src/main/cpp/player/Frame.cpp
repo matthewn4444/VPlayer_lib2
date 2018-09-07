@@ -3,7 +3,6 @@
 static const char* sTag = "Frame";
 
 Frame::Frame(bool useAVFrame) :
-        hasUploaded(false),
         flipVertical(false),
         mDuration(0),
         mMaxDuration(0),
@@ -51,7 +50,6 @@ void Frame::setAVFrame(AVFrame *frame, AVRational duration, AVRational tb,
         return;
     }
     mSar = frame->sample_aspect_ratio;
-    hasUploaded = false;
     mWidth = frame->width;
     mHeight = frame->height;
     mFormat = frame->format;
@@ -75,7 +73,6 @@ void Frame::updateAsSubtitle(int width, int height, intptr_t serial) {
     mWidth = width;
     mHeight = height;
     mSerial = serial;
-    hasUploaded = false;
 }
 
 AVFrame *Frame::frame() {

@@ -23,13 +23,21 @@ public:
 
     bool writeSubtitlesSeparately() override;
 
+    int renderLastFrame();
+
 private:
-    int writeFrameToWindow(AVFrame* frame, ANativeWindow* window);
+    int writeFrameToWindow(AVFrame* frame, ANativeWindow* window, ANativeWindow_Buffer& buffer);
+    int writeBufferToWindow(ANativeWindow* window, ANativeWindow_Buffer& buffer, int w, int h);
+    int internalRenderFrame();
     void release();
 
     std::mutex mMutex;
     ANativeWindow* mWindow;
     ANativeWindow* mSubWindow;
+
+    ANativeWindow_Buffer mWindowBuffer;
+    ANativeWindow_Buffer mSubWindowBuffer;
+
     bool mSubWindowHasData;
 };
 

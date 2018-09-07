@@ -205,6 +205,12 @@ void Player::remeasureAudioLatency() {
     }
 }
 
+void Player::invalidateVideoFrame() {
+    if (mVideoStream) {
+        mVideoStream->invalidNextFrame();
+    }
+}
+
 void Player::reset() {
     abort();
     if (mReadThreadId && mReadThreadId->get_id() != std::this_thread::get_id()) {

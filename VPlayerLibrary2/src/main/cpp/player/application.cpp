@@ -138,6 +138,12 @@ extern "C" JNIEXPORT void JAVA_EXPORT_NAME(surfaceCreated) (JNIEnv *env, jobject
 }
 
 extern "C" JNIEXPORT void JAVA_EXPORT_NAME(surfaceDestroyed) (JNIEnv *env, jobject instance) {
+    // When destroying surface, make sure no frames are held as locked in the video stream
+    Player* player = getPlayerPtr(env, instance);
+    if (player) {
+        player->invalidateVideoFrame();
+    }
+
     JniVideoRenderer* vRenderer = getVideoRendererPtr(env, instance);
     if (vRenderer) {
         vRenderer->onSurfaceDestroyed();
@@ -164,6 +170,15 @@ extern "C" JNIEXPORT void JAVA_EXPORT_NAME(nativeSetDefaultSubtitleFont) (JNIEnv
         player->setDefaultSubtitleFont(fontPath, fontFamily);
         env->ReleaseStringUTFChars(jfontPath, fontPath);
         env->ReleaseStringUTFChars(jfontFamily, fontFamily);
+    }
+}
+
+extern "C" JNIEXPORT void JNICALL JAVA_EXPORT_NAME(nativeRenderLastFrame) (JNIEnv *env,
+                                                                           jobject instance) {
+    JniVideoRenderer* vRenderer = getVideoRendererPtr(env, instance);
+    Player* player = getPlayerPtr(env, instance);
+    if (vRenderer && player && player->isPaused()) {
+        vRenderer->renderLastFrame();
     }
 }
 

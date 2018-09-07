@@ -3,6 +3,7 @@ package com.matthewn4444.vplayerlibrary2;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.PixelFormat;
+import android.os.AsyncTask;
 import android.support.annotation.IntDef;
 import android.support.annotation.MainThread;
 import android.support.annotation.NonNull;
@@ -31,8 +32,6 @@ public class VPlayerView extends FrameLayout {
 
 
     private final SurfaceHolder.Callback mSurfaceCallback = new SurfaceHolder.Callback() {
-        private boolean mVideoSurfaceCreated;
-        private boolean mSubtitleSurfaceCreated;
 
         @Override
         public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
@@ -49,6 +48,18 @@ public class VPlayerView extends FrameLayout {
             if (mVideoSurfaceCreated && mSubtitleSurfaceCreated) {
                 mController.surfaceCreated(mVideoSurface.getHolder().getSurface(),
                        mSubtitlesSurface.getHolder().getSurface());
+                if (mPlayWhenSurfacesReady) {
+                    mPlayWhenSurfacesReady = false;
+                    mController.play();
+                } else {
+                    // When returning back, player needs render frames on new surfaces
+                    AsyncTask.execute(new Runnable() {
+                        @Override
+                        public void run() {
+                            mController.nativeRenderLastFrame();
+                        }
+                    });
+                }
             }
         }
 
@@ -68,6 +79,10 @@ public class VPlayerView extends FrameLayout {
     private final SurfaceView mSubtitlesSurface;
 
     private VPlayer2NativeController mController;
+
+    private boolean mVideoSurfaceCreated;
+    private boolean mSubtitleSurfaceCreated;
+    private boolean mPlayWhenSurfacesReady;
 
     public VPlayerView(@NonNull Context context) {
         this(context, null);
@@ -104,10 +119,17 @@ public class VPlayerView extends FrameLayout {
     }
 
     public void play() {
-        mController.play();
+        // Play when the surfaces are ready otherwise we will have dropped frames
+        if (mVideoSurfaceCreated && mSubtitleSurfaceCreated) {
+            mPlayWhenSurfacesReady = false;
+            mController.play();
+        } else {
+            mPlayWhenSurfacesReady = true;
+        }
     }
 
     public void pause() {
+        mPlayWhenSurfacesReady = false;
         mController.pause();
     }
 

@@ -35,14 +35,14 @@ SubtitleStream::~SubtitleStream() {
     }
 }
 
-int SubtitleStream::prepareSubtitleFrame(int64_t pts, double clockPts) {
+int SubtitleStream::prepareSubtitleFrame(int64_t pts, double clockPts, bool force) {
     int ret = ensureQueue();
     if (ret < 0) {
         return ret;
     }
     AVFrame* subTmpFrame = mFrameQueue->getNextFrame();
     subTmpFrame->pts = pts;
-    if ((ret = blendToFrame(subTmpFrame, clockPts)) < 0) {
+    if ((ret = blendToFrame(subTmpFrame, clockPts, force)) < 0) {
         __android_log_print(ANDROID_LOG_WARN, sTag, "Failed to blend subs to sub videoFrame");
     } else if (ret > 0) {
         // Has Changed, add it to the list

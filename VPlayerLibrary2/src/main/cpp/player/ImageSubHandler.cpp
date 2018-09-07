@@ -108,6 +108,10 @@ int ImageSubHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSeria
                             ret = 1;
                         }
                         blendFrames(vFrame, tmpFrame, cache.x, cache.y);
+                        if (force) {
+                            // Re-render this frame if forced
+                            ret = 1;
+                        }
                     }
                 } else {
                     __android_log_print(ANDROID_LOG_WARN, sTag,

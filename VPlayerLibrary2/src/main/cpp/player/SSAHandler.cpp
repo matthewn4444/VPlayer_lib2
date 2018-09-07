@@ -106,8 +106,11 @@ int SSAHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial, bo
     {
         std::lock_guard<std::mutex> lk(mAssMutex);
         image = ass_render_frame(mAssRenderer, mAssTrack, (long long int) vFrame->pts, &changed);
+        if (force) {
+            changed = 2;
+        }
     }
-    if (changed == 2 || force) {
+    if (changed == 2) {
         for (; image != NULL; image = image->next) {
             blendSSA(vFrame, image);
         }

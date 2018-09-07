@@ -26,6 +26,8 @@ public:
 
     void setSupportNetworkControls(bool flag);
 
+    void invalidNextFrame();
+
     bool canEnqueueStreamPacket(const AVPacket& packet) override;
     bool allowFrameDrops();
 
@@ -48,10 +50,11 @@ private:
 
     IVideoRenderer* mVideoRenderer;
     SubtitleStream* mSubStream;
-    bool mNextFrameWritten;
+    std::atomic<bool> mNextFrameWritten;
     bool mFrameStepMode;
     bool mForceRefresh;
     bool mAllowDropFrames;
+    bool mInvalidateSubs;
     double mFrameTimer;
     int mEarlyFrameDrops;
     int mLateFrameDrops;

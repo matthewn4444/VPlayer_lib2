@@ -60,6 +60,8 @@ public:
     void setCallback(IPlayerCallback *callback);
 
     void remeasureAudioLatency();
+
+    void invalidateVideoFrame();
 private:
     void reset();
     void sleepMs(long ms);

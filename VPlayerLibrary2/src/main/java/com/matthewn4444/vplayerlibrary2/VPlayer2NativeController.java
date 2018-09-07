@@ -296,6 +296,8 @@ public class VPlayer2NativeController {
 
     native void nativeSetDefaultSubtitleFont(String fontPath, String fontFamily);
 
+    native void nativeRenderLastFrame();
+
     native void remeasureAudioLatency();
 
     public native void surfaceCreated(@NonNull Surface videoSurface, @Nullable Surface subSurface);

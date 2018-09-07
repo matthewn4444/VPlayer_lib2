@@ -16,6 +16,8 @@ public class MainActivity extends BaseActivity {
 
     VPlayerView mView;
 
+    private boolean mPausedBeforeLeave;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -69,9 +71,18 @@ public class MainActivity extends BaseActivity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        if (!mPausedBeforeLeave) {
+            mView.play();
+        }
+    }
+
+    @Override
     protected void onPause() {
-        super.onPause();
+        mPausedBeforeLeave = mView.isPaused();
         mView.pause();
+        super.onPause();
     }
 
     @Override
