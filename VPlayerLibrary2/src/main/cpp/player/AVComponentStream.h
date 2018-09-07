@@ -13,7 +13,7 @@ public:
                       ICallback* callback, size_t maxSize);
     virtual ~AVComponentStream();
 
-    void setPaused(bool paused, int pausePlayRet) override;
+    void setPaused(bool paused) override;
 
     inline Clock* getClock() {
         return mClock;
@@ -36,6 +36,8 @@ protected:
     int open() override;
     void internalCleanUp();
 
+    void waitIfRenderPaused();
+
     FrameQueue* mQueue;
     Clock* mClock;
 
@@ -44,6 +46,7 @@ private:
 
     size_t mQueueMaxSize;
     std::thread* mRenderThread;
+    std::condition_variable mRenderPauseCondition;
 };
 
 #endif //AVCOMPONENTSTREAM_H

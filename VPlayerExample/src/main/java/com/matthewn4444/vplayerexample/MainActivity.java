@@ -3,6 +3,7 @@ package com.matthewn4444.vplayerexample;
 import android.os.Bundle;
 import android.os.Environment;
 import android.support.annotation.NonNull;
+import android.view.View;
 import android.widget.Toast;
 
 import com.matthewn4444.vplayerlibrary2.VPlayerException;
@@ -54,6 +55,23 @@ public class MainActivity extends BaseActivity {
         if (hasStoragePermissions()) {
             loadVideo();
         }
+
+        mView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (mView.isPaused()) {
+                    mView.play();
+                } else {
+                    mView.pause();
+                }
+            }
+        });
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        mView.pause();
     }
 
     @Override

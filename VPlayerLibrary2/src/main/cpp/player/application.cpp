@@ -186,3 +186,23 @@ extern "C" JNIEXPORT jboolean JNICALL JAVA_EXPORT_NAME(nativeOpen) (JNIEnv *env,
     }
     return JNI_FALSE;
 }
+
+extern "C" JNIEXPORT void JNICALL JAVA_EXPORT_NAME(nativePlay) (JNIEnv *env, jobject instance) {
+    Player* player = getPlayerPtr(env, instance);
+    if (player && player->isPaused()) {
+        player->togglePlayback();
+    }
+}
+
+extern "C" JNIEXPORT void JNICALL JAVA_EXPORT_NAME(nativePause) (JNIEnv *env, jobject instance) {
+    Player* player = getPlayerPtr(env, instance);
+    if (player && !player->isPaused()) {
+        player->togglePlayback();
+    }
+}
+
+extern "C" JNIEXPORT jboolean JNICALL JAVA_EXPORT_NAME(nativeIsPaused) (JNIEnv *env,
+                                                                        jobject instance) {
+    Player* player = getPlayerPtr(env, instance);
+    return (jboolean) (player && player->isPaused() ? JNI_TRUE : JNI_FALSE);
+}

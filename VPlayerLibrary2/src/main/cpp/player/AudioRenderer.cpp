@@ -127,7 +127,6 @@ int AudioRenderer::play() {
         return -1;
     }
     env->CallVoidMethod(instance, sMethodAudioTrackPlay);
-    // TODO is mTimestampStabilizing = true needed here?, check the timestamp again
     return 0;
 }
 
@@ -185,8 +184,19 @@ double AudioRenderer::updateLatency(bool force) {
 
         // If the unable to getTimestamp, time or position is the same as before, clock is
         // stabilizing so wait shorter periods of time until getTimestamp is stabilized
-        if (!getTimeStamp(&framePos, &timestamp) || mLastFrameTime == timestamp || timestamp <= 0
-                || mLastFramePosition == framePos || mLastFramePosition < 0) {
+        double latency = 0;
+        bool needStabilization = !getTimeStamp(&framePos, &timestamp) || mLastFrameTime == timestamp
+                           || timestamp <= 0 || mLastFramePosition == framePos
+                           || mLastFramePosition < 0;
+        if (!needStabilization) {
+            // Calculate the latency compared to the data already written
+            double headPos = framePos + (now - timestamp) * mSampleRate / SEC_TO_NS;
+            latency = (mFramesWritten - headPos) / mSampleRate;
+
+            // If latency is negative, it means it is stabilizing, might be after pause then play
+            needStabilization |= latency < 0;
+        }
+        if (needStabilization) {
             mTimestampStabilizing = true;
             __android_log_print(ANDROID_LOG_VERBOSE, sTag, "Audio timestamp is stabilizing");
 
@@ -202,10 +212,7 @@ double AudioRenderer::updateLatency(bool force) {
         mTimestampStabilizing = false;
         mLastFramePosition = framePos;
         mLastFrameTime = timestamp;
-
-        // Calculate the latency compared to the data already written
-        double headPos = framePos + (now - timestamp) * mSampleRate / SEC_TO_NS;
-        mLastLatencySec = std::max((mFramesWritten - headPos) / mSampleRate, 0.0);
+        mLastLatencySec = latency;
         __android_log_print(ANDROID_LOG_VERBOSE, sTag,
                             "Update audio latency [getTimestamp()] %lf ms", mLastLatencySec * 1000);
     }

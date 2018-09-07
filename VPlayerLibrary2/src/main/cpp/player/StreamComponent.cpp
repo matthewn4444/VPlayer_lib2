@@ -92,7 +92,10 @@ void StreamComponent::setCallback(IPlayerCallback *callback) {
     mPlayerCallback = callback;
 }
 
-void StreamComponent::setPaused(bool paused, int pausePlayRet) {
+void StreamComponent::setPaused(bool paused) {
+    if (!paused) {
+        mPauseCondition.notify_all();
+    }
 }
 
 AVDictionary **StreamComponent::getProperties(int *ret) {
@@ -189,6 +192,7 @@ void StreamComponent::close() {
     }
     __android_log_print(ANDROID_LOG_VERBOSE, sTag, "Waiting for %s decoding thread to join...",
                         av_get_media_type_string(mType));
+    mPauseCondition.notify_all();
     if (mDecodingThread) {
         mDecodingThread->join();
         mDecodingThread = NULL;
@@ -230,6 +234,17 @@ bool StreamComponent::hasAborted() {
 
 bool StreamComponent::hasStartedDecoding() {
     return mDecodingThread != NULL;
+}
+
+void StreamComponent::waitIfPaused() {
+    std::mutex waitMutex;
+    while (isPaused()) {
+        std::unique_lock<std::mutex> lk(waitMutex);
+        mPauseCondition.wait(lk, [this] {return hasAborted() || !isPaused();});
+        if (hasAborted()) {
+            break;
+        }
+    }
 }
 
 int StreamComponent::getCodecInfo(int streamIndex, AVCodecContext **oCContext, AVCodec **oCodec) {

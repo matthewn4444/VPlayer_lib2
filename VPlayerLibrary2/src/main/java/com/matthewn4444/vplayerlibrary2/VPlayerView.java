@@ -103,6 +103,18 @@ public class VPlayerView extends FrameLayout {
         mController.open(filepath);
     }
 
+    public void play() {
+        mController.play();
+    }
+
+    public void pause() {
+        mController.pause();
+    }
+
+    public boolean isPaused() {
+        return mController.nativeIsPaused();
+    }
+
     public void setListener(VPlayerListener listener) {
         mController.setListener(listener);
     }

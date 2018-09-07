@@ -11,6 +11,9 @@ class AudioStream : public AVComponentStream {
 public:
     AudioStream(AVFormatContext* context, AVPacket* flushPkt, ICallback* callback);
     virtual ~AudioStream();
+
+    void setPaused(bool paused) override;
+
     void invalidateLatency();
     double getLatency();
 
@@ -33,6 +36,7 @@ private:
     IAudioRenderer* mAudioRenderer;
     bool mIsMuted;
     bool mLatencyInvalidated;
+    bool mPlaybackStateChanged;
 
     struct SwrContext* mSwrContext;
     uint8_t* mAudioBuffer;

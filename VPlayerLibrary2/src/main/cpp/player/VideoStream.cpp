@@ -27,6 +27,7 @@ VideoStream::VideoStream(AVFormatContext* context, AVPacket* flushPkt, ICallback
         mEarlyFrameDrops(0),
         mMaxFrameDuration(0),
         mLateFrameDrops(0),
+        mCanSupportNetworkControls(false),
         mCSConverter(NULL) {
 }
 
@@ -37,15 +38,15 @@ VideoStream::~VideoStream() {
     }
 }
 
-void VideoStream::setPaused(bool paused, int pausePlayRet) {
+void VideoStream::setPaused(bool paused) {
     if (!paused) {
-        mFrameTimer = mClock->getTimeSinceLastUpdate();
-        if (pausePlayRet != AVERROR(ENOSYS)) {
+        mFrameTimer += mClock->getTimeSinceLastUpdate();
+        if (mCanSupportNetworkControls) {
             mClock->paused = false;
         }
         mClock->updatePts();
     }
-    AVComponentStream::setPaused(paused, pausePlayRet);
+    AVComponentStream::setPaused(paused);
 }
 
 
@@ -56,6 +57,10 @@ void VideoStream::setVideoRenderer(IVideoRenderer *videoRenderer) {
 
 void VideoStream::setSubtitleComponent(SubtitleStream *stream) {
     mSubStream = stream;
+}
+
+void VideoStream::setSupportNetworkControls(bool flag) {
+    mCanSupportNetworkControls = flag;
 }
 
 bool VideoStream::allowFrameDrops() {
@@ -178,6 +183,8 @@ int VideoStream::onProcessThread() {
     spawnRendererThreadIfHaveNot();
 
     while (1) {
+        waitIfPaused();
+
         // Get current frame and until error or abort
         if ((ret = decodeFrame(avFrame)) < 0) {
             if (ret != AVERROR_EXIT) {
@@ -236,7 +243,8 @@ int VideoStream::onRenderThread() {
     int ret;
     double remainingTime = 0;
     while (!hasAborted()) {
-        // TODO wait if paused and use a condition variable to resume
+        waitIfRenderPaused();
+
         if (remainingTime > 0.0) {
 //            _log("Wait video thread %lf", remainingTime);
             std::this_thread::sleep_for(

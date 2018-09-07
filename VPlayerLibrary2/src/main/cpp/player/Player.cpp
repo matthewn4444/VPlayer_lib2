@@ -51,7 +51,6 @@ Player::Player() :
         mAttachmentsRequested(false),
         mIsPaused(false),
         mLastPaused(false),
-        mReadPauseRet(0),
         mSeekPos(0),
         mSeekRel(0),
         mIsEOF(false),
@@ -99,11 +98,27 @@ void Player::setVideoRenderer(IVideoRenderer *videoRenderer) {
 }
 
 void Player::togglePlayback() {
-    for (int i = 0; i < mAVComponents.size(); i++) {
-        mAVComponents[i]->setPaused(mIsPaused, mReadPauseRet);
+    if (!getMasterClock()) {
+        __android_log_print(ANDROID_LOG_WARN, sTag, "Cannot toggle playback when not is playing");
+        return;
+    }
+    mIsPaused = !mIsPaused;
+
+    // Make sure master clock is reflected in pause state so streams can resume/pause correctly
+    getMasterClock()->paused = mIsPaused;
+
+    // Do not pause if aborted
+    if (!mAbortRequested) {
+        for (int i = 0; i < mAVComponents.size(); i++) {
+            mAVComponents[i]->setPaused(mIsPaused);
+        }
     }
     mExtClock.updatePts();
-    mIsPaused = mExtClock.paused = !mIsPaused;
+    mExtClock.paused = mIsPaused;
+
+    if (!mIsPaused) {
+        mPauseCondition.notify_all();
+    }
 }
 
 IAudioRenderer *Player::createAudioRenderer(AVCodecContext *context) {
@@ -193,6 +208,7 @@ void Player::remeasureAudioLatency() {
 void Player::reset() {
     abort();
     if (mReadThreadId && mReadThreadId->get_id() != std::this_thread::get_id()) {
+        mPauseCondition.notify_all();
         mReadThreadCondition.notify_all();
         __android_log_print(ANDROID_LOG_VERBOSE, sTag, "Waiting to join read thread...");
         mReadThreadId->join();
@@ -368,11 +384,14 @@ int Player::tReadLoop(AVFormatContext *context) {
     mCallback->onStreamReady();
 
     while (!mAbortRequested) {
+
+        // Handle pause/play network stream, only run when difference occurs
         if (mIsPaused != mLastPaused) {
-            // TODO can we simplify the paused logic?, may be used for rtmp
             mLastPaused = mIsPaused;
             if (mIsPaused) {
-                mReadPauseRet = av_read_pause(context);
+                if (av_read_pause(context) != AVERROR(ENOSYS) && mVideoStream) {
+                    mVideoStream->setSupportNetworkControls(true);
+                }
             } else {
                 av_read_play(context);
             }
@@ -433,6 +452,15 @@ int Player::tReadLoop(AVFormatContext *context) {
 
         if (mAbortRequested) {
             break;
+        }
+
+        // Wait if paused is requested
+        while (mIsPaused) {
+            std::unique_lock<std::mutex> lk(waitMutex);
+            mPauseCondition.wait(lk, [this] {return mAbortRequested || !mIsPaused;});
+            if (mAbortRequested) {
+                break;
+            }
         }
 
         // Cooldown if queues are full and continue after 10sec sleep or by condition

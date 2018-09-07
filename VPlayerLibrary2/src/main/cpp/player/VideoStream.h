@@ -14,7 +14,7 @@ public:
     VideoStream(AVFormatContext* context, AVPacket* flushPkt, ICallback* callback);
     virtual ~VideoStream();
 
-    void setPaused(bool paused, int pausePlayRet) override;
+    void setPaused(bool paused) override;
 
     void setFrameStepMode(bool flag) {
         mFrameStepMode = flag;
@@ -23,6 +23,8 @@ public:
     void setVideoRenderer(IVideoRenderer* videoRenderer);
 
     void setSubtitleComponent(SubtitleStream* stream);
+
+    void setSupportNetworkControls(bool flag);
 
     bool canEnqueueStreamPacket(const AVPacket& packet) override;
     bool allowFrameDrops();
@@ -54,6 +56,7 @@ private:
     int mEarlyFrameDrops;
     int mLateFrameDrops;
     long mMaxFrameDuration;
+    bool mCanSupportNetworkControls;
     AvFramePool mFramePool;
     BasicYUVConverter* mCSConverter;
 };

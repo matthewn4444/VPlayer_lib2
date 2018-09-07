@@ -34,7 +34,7 @@ public:
     virtual void abort();
     int pickBest(int relativeStream = -1);
     int pickByIndex(int streamNumber, bool fromAllStreams = false);
-    virtual void setPaused(bool paused, int pausePlayRet);     // TODO, i believe pauseplayret is only for realtime streams, check this (like rtmp)
+    virtual void setPaused(bool paused);
     void startDecoding();
     void setCallback(IPlayerCallback* callback);
 
@@ -93,6 +93,8 @@ protected:
     bool hasAborted();
     bool hasStartedDecoding();
 
+    void waitIfPaused();
+
     std::vector<int> mAvailStreamIndexes;
 
     virtual AVDictionary* getPropertiesOfStream(AVCodecContext*, AVStream*, AVCodec*);
@@ -103,6 +105,7 @@ protected:
     int mStreamIndex;
     IPlayerCallback* mPlayerCallback;
     ICallback* mCallback;
+    std::condition_variable mPauseCondition;
 
     // Decoding variables
     AVPacket mPkt;

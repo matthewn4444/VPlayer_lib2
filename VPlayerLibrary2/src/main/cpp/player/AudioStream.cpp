@@ -19,6 +19,7 @@ AudioStream::AudioStream(AVFormatContext* context, AVPacket* flushPkt, ICallback
         mStartPts(AV_NOPTS_VALUE),
         mLatencyInvalidated(false),
         mIsMuted(false),
+        mPlaybackStateChanged(false),
         mDiffComputation(0),
         mDiffAvgCoef(exp(log(0.01) / AUDIO_DIFF_AVG_NB)),
         mDiffAvgCount(0) {
@@ -40,6 +41,11 @@ AudioStream::~AudioStream() {
     if (mAudioBuffer) {
         av_freep(&mAudioBuffer);
     }
+}
+
+void AudioStream::setPaused(bool paused) {
+    mPlaybackStateChanged = true;
+    AVComponentStream::setPaused(paused);
 }
 
 void AudioStream::invalidateLatency() {
@@ -88,6 +94,8 @@ int AudioStream::onProcessThread() {
     spawnRenderThread();
 
     do {
+        waitIfPaused();
+
         if ((ret = decodeFrame(avFrame)) < 0) {
             if (ret != AVERROR_EXIT) {
                 error(ret, "Cannot decode audio frame");
@@ -120,9 +128,16 @@ int AudioStream::onRenderThread() {
         Frame *frame;
         AVFrame *af;
 
-        if (isPaused()) {
-            // TODO sleep
+        // Pause if needed
+        if (mPlaybackStateChanged) {
+            if (isPaused()) {
+                mAudioRenderer->pause();
+            } else {
+                mAudioRenderer->play();
+            }
+            mPlaybackStateChanged = false;
         }
+        waitIfRenderPaused();
 
         double frameDecodeStart = Clock::now();
 
@@ -158,9 +173,6 @@ int AudioStream::onRenderThread() {
                 }
                 if (ret < 0) {
                     return error(ret, "Failed to write from audio renderer");
-                }
-                if (isPaused()) {
-                    // TODO sleep
                 }
                 written += ret;
                 size -= FFMAX(ret, 0);
@@ -286,4 +298,3 @@ int AudioStream::syncClocks(AVFrame* frame) {
     }
     return wantedSamples;
 }
-

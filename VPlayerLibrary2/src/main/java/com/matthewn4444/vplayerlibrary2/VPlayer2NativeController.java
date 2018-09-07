@@ -171,6 +171,20 @@ public class VPlayer2NativeController {
         }
     }
 
+    public void play() {
+        if (mAudioTrack != null) {
+            mAudioTrack.setVolume(1);
+        }
+        nativePlay();
+    }
+
+    public void pause() {
+        if (mAudioTrack != null) {
+            mAudioTrack.setVolume(0);
+        }
+        nativePause();
+    }
+
     // Called from jni
     private void nativeMetadataReady(final Map<String, String>[] data) {
         if (mListener != null) {
@@ -274,6 +288,10 @@ public class VPlayer2NativeController {
 
     private native boolean nativeOpen(String streamFileUrl);
 
+    private native void nativePlay();
+
+    private native void nativePause();
+
     private native void nativeSetSubtitleFrameSize(int width, int height);
 
     native void nativeSetDefaultSubtitleFont(String fontPath, String fontFamily);
@@ -283,6 +301,9 @@ public class VPlayer2NativeController {
     public native void surfaceCreated(@NonNull Surface videoSurface, @Nullable Surface subSurface);
 
     native void surfaceDestroyed();
+
+
+    native boolean nativeIsPaused();
 
     protected static void log(Object... txt) {
         String returnStr = "";

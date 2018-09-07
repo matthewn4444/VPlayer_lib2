@@ -152,6 +152,8 @@ int SubtitleStream::onProcessThread() {
     _log("Process subtitle thread start");
     int ret;
     while (1) {
+        waitIfPaused();
+
         AVSubtitle* subtitle = mHandler->getSubtitle();
         if (!subtitle || (ret = decodeFrame(subtitle)) < 0) {
             break;

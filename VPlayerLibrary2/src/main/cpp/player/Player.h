@@ -46,8 +46,12 @@ public:
     void onQueueEmpty(StreamComponent* component) override;
     void abort() override;
 
-    inline bool isAborting() {
+    bool isAborting() {
         return mAbortRequested;
+    }
+
+    bool isPaused() {
+        return mIsPaused;
     }
 
     void setSubtitleFrameSize(int width, int height);
@@ -93,10 +97,10 @@ private:
     bool mSeekRequested;
     bool mAttachmentsRequested;
 
-    // Pause variables TODO why do we need 3 of them?
+    // Pause variables
     bool mIsPaused;
     bool mLastPaused;
-    int mReadPauseRet;
+    std::condition_variable mPauseCondition;
 
     // Seek variables
     int64_t mSeekPos;

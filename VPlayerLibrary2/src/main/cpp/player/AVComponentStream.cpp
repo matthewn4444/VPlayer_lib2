@@ -20,9 +20,12 @@ AVComponentStream::~AVComponentStream() {
     }
 }
 
-void AVComponentStream::setPaused(bool paused, int pausePlayRet) {
+void AVComponentStream::setPaused(bool paused) {
     mClock->paused = paused;
-
+    StreamComponent::setPaused(paused);
+    if (!paused) {
+        mRenderPauseCondition.notify_all();
+    }
 }
 
 int AVComponentStream::open() {
@@ -74,6 +77,17 @@ void AVComponentStream::spawnRenderThread() {
     mRenderThread = new std::thread(&AVComponentStream::internalRenderThread, this);
 }
 
+void AVComponentStream::waitIfRenderPaused() {
+    std::mutex waitMutex;
+    while (isPaused()) {
+        std::unique_lock<std::mutex> lk(waitMutex);
+        mRenderPauseCondition.wait(lk, [this] {return hasAborted() || !isPaused();});
+        if (hasAborted()) {
+            break;
+        }
+    }
+}
+
 void AVComponentStream::internalRenderThread() {
     IPlayerCallback::UniqueCallback unCallback(mPlayerCallback);
     onRenderThread();
@@ -86,6 +100,7 @@ void AVComponentStream::internalCleanUp() {
     }
 
     if (mRenderThread) {
+        mRenderPauseCondition.notify_all();
         __android_log_print(ANDROID_LOG_VERBOSE, sTag, "Join render thread %s", typeName());
         mRenderThread->join();
         mRenderThread = NULL;
