@@ -18,6 +18,7 @@ FrameQueue::FrameQueue(bool isAVQueue, size_t maxSize) :
 
 FrameQueue::~FrameQueue() {
     abort();
+    std::unique_lock<std::mutex> lk(mMutex);
     for (int i = 0; i < mMaxSize; i++) {
         delete mQueue[i];
         mQueue[i] = NULL;
