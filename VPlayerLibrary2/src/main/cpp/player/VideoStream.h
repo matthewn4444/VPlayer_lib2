@@ -32,6 +32,9 @@ public:
     bool allowFrameDrops();
 
     float getAspectRatio();
+    bool inFrameStepMode() {
+        return mFrameStepMode;
+    }
 
 protected:
     int onProcessThread() override;

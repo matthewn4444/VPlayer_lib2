@@ -20,6 +20,7 @@ public:
         virtual AVSubtitle* getSubtitle() = 0;
         virtual bool areFramesPending() = 0;
         virtual void invalidateFrame() = 0;
+        virtual void flush() = 0;
 
         const AVCodecID codec_id;
     };
@@ -43,6 +44,7 @@ protected:
     void onReceiveDecodingFrame(void *frame, int *outRetCode) override;
     int onProcessThread() override;
     void onDecodeFrame(void* frame, AVPacket* pkt, int* outRetCode) override;
+    void onDecodeFlushBuffers() override;
 
     bool areFramesPending() override;
 

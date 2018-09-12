@@ -197,6 +197,10 @@ void ImageSubHandler::invalidateFrame() {
     mInvalidate = true;
 }
 
+void ImageSubHandler::flush() {
+    // Not used
+}
+
 int ImageSubHandler::prepareSubFrame(AVSubtitleRect* rect, FrameCache& cache, int vWidth,
                                      int vHeight) {
     int ret = 0;

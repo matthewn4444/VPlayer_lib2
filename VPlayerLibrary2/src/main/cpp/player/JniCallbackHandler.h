@@ -34,11 +34,15 @@ static const JavaMethod sMethodMetadataReadySpec = {"nativeMetadataReady", "([Lj
 static const JavaMethod sMethodCreateAudioTrackSpec = {"nativeCreateAudioTrack", "(II)Landroid/media/AudioTrack;"};
 static const JavaMethod sMethodStreamReadySpec = {"nativeStreamReady", "()V"};
 static const JavaMethod sMethodStreamFinishedSpec = {"nativeStreamFinished", "()V"};
+static const JavaMethod sMethodProgressChangedSpec = {"nativeProgressChanged", "(JJ)V"};
+static const JavaMethod sMethodPlaybackChangedSpec = {"nativePlaybackChanged", "(Z)V"};
 static jmethodID sMethodNativeError;
 static jmethodID sMethodMetadataReady;
 static jmethodID sMethodCreateAudioTrack;
 static jmethodID sMethodStreamReady;
 static jmethodID sMethodStreamFinished;
+static jmethodID sMethodProgressChanged;
+static jmethodID sMethodPlaybackChanged;
 
 jfieldID getJavaField(JNIEnv *env, jclass clazz, JavaField field);
 jfieldID getStaticJavaField(JNIEnv *env, jclass clazz, JavaField field);
@@ -67,6 +71,8 @@ public:
                          AVDictionary**, size_t) override;
     void onStreamReady() override;
     void onStreamFinished() override;
+    void onProgressChanged(long currentMs, long durationMs);
+    void onPlaybackChanged(bool playing) override;
 
     IAudioRenderer *createAudioRenderer(AVCodecContext *context) override;
 

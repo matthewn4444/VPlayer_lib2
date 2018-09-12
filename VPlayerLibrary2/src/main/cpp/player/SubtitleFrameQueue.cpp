@@ -45,7 +45,7 @@ int SubtitleFrameQueue::resize(size_t size, int width, int height, AVPixelFormat
     return 0;
 }
 
-AVFrame *SubtitleFrameQueue::getNextFrame() {
+AVFrame *SubtitleFrameQueue::getNextFrame(int64_t pts) {
     if (isFull()) {
         __android_log_print(ANDROID_LOG_WARN, sTag, "Cannot pull next frame, it is full");
         return NULL;
@@ -56,8 +56,8 @@ AVFrame *SubtitleFrameQueue::getNextFrame() {
     if (mFrameInvalidated[mFrameNextIndex]) {
         mFrameInvalidated[mFrameNextIndex] = false;
         memset(frame->data[0], 0, static_cast<size_t>(frame->height * frame->linesize[0]));
-        frame->pts = AV_NOPTS_VALUE;
     }
+    frame->pts = pts;
     return frame;
 }
 
@@ -92,6 +92,9 @@ bool SubtitleFrameQueue::isEmpty() {
 }
 
 bool SubtitleFrameQueue::isFull() {
+    if (isEmpty()) {
+        return false;
+    }
     int index = nextIndex(mFrameNextIndex);
     return index == mFrameHeadIndex;
 }
@@ -102,6 +105,20 @@ int SubtitleFrameQueue::getWidth() {
 
 int SubtitleFrameQueue::getHeight() {
     return mHeight;
+}
+
+size_t SubtitleFrameQueue::size() {
+    if (isFull()) {
+        return mCapacity;
+    }
+    if (isEmpty()) {
+        return 0;
+    }
+    if (mFrameHeadIndex > mFrameNextIndex) {
+        return (mCapacity - mFrameHeadIndex) + mFrameNextIndex;
+    } else {
+        return (size_t) mFrameNextIndex - mFrameHeadIndex;
+    }
 }
 
 void SubtitleFrameQueue::reset() {

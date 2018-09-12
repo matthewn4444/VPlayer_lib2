@@ -24,6 +24,8 @@ public:
 
     void invalidateFrame() override;
 
+    void flush() override;
+
 private:
     struct FrameCache {
         int x;

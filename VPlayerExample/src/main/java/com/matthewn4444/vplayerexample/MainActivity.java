@@ -3,7 +3,10 @@ package com.matthewn4444.vplayerexample;
 import android.os.Bundle;
 import android.os.Environment;
 import android.support.annotation.NonNull;
+import android.support.v4.content.ContextCompat;
 import android.view.View;
+import android.widget.ImageButton;
+import android.widget.SeekBar;
 import android.widget.Toast;
 
 import com.matthewn4444.vplayerlibrary2.VPlayerException;
@@ -14,16 +17,20 @@ import java.util.Map;
 
 public class MainActivity extends BaseActivity {
 
-    VPlayerView mView;
+    private VPlayerView mVideoView;
+    private ImageButton mPausePlay;
+    private SeekBar mSeekBar;
 
     private boolean mPausedBeforeLeave;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        mView = new VPlayerView(this);
-        setContentView(mView);
-        mView.setListener(new VPlayerListener() {
+        setContentView(R.layout.activity_main);
+        mVideoView = findViewById(R.id.video);
+        mPausePlay = findViewById(R.id.pauseplay);
+        mSeekBar = findViewById(R.id.seekbar);
+        mVideoView.setListener(new VPlayerListener() {
             @Override
             public void onMetadataReady(@NonNull Map<String, String>[] metadataList) {
 //                log("Metadata ready", metadataList.length);
@@ -36,6 +43,9 @@ public class MainActivity extends BaseActivity {
 //                        }
 //                    }
 //                }
+
+                mSeekBar.setMax((int) mVideoView.getDuration());
+                mSeekBar.setEnabled(true);
             }
 
             @Override
@@ -49,6 +59,21 @@ public class MainActivity extends BaseActivity {
             }
 
             @Override
+            public void onProgressChanged(long currentMs, long durationMs) {
+                mSeekBar.setProgress((int) currentMs);
+            }
+
+            @Override
+            public void onPlaybackChanged(boolean isPlaying) {
+                if (mPausedBeforeLeave) {
+                    mPausePlay.setImageDrawable(ContextCompat.getDrawable(MainActivity.this,
+                            isPlaying
+                                    ? R.drawable.ic_play_arrow_white_48dp
+                                    : R.drawable.ic_pause_white_48dp));
+                }
+            }
+
+            @Override
             public void onVideoError(@NonNull VPlayerException exception) {
                 Toast.makeText(MainActivity.this, exception.getMessage(), Toast.LENGTH_SHORT).show();
             }
@@ -58,30 +83,47 @@ public class MainActivity extends BaseActivity {
             loadVideo();
         }
 
-        mView.setOnClickListener(new View.OnClickListener() {
+        mPausePlay.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (mView.isPaused()) {
-                    mView.play();
+                if (mVideoView.isPaused()) {
+                    mVideoView.play();
                 } else {
-                    mView.pause();
+                    mVideoView.pause();
                 }
             }
         });
+
+        mSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                mVideoView.seek(seekBar.getProgress());
+            }
+        });
+        mSeekBar.setEnabled(false);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         if (!mPausedBeforeLeave) {
-            mView.play();
+            mVideoView.play();
         }
+        mPausedBeforeLeave = true;
     }
 
     @Override
     protected void onPause() {
-        mPausedBeforeLeave = mView.isPaused();
-        mView.pause();
+        mPausedBeforeLeave = mVideoView.isPaused();
+        mVideoView.pause();
         super.onPause();
     }
 
@@ -94,8 +136,6 @@ public class MainActivity extends BaseActivity {
     }
 
     private void loadVideo() {
-//        mView.openFile("https://www.w3schools.com/html/mov_bbb.mp4");
-//        mView.openFile("https://media.w3.org/2010/05/sintel/trailer.mp4");
-        mView.openFile(Environment.getExternalStorageDirectory() + "/Movies/video.mkv");
+        mVideoView.openFile(Environment.getExternalStorageDirectory() + "/Movies/video.mkv");
     }
 }

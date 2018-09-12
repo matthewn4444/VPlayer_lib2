@@ -22,7 +22,10 @@ public:
 
     void invalidateFrame() override;
 
+    void flush() override;
+
     void blendSSA(AVFrame *vFrame, const ASS_Image *subImage);
+
 
 private:
     std::mutex mAssMutex;
@@ -30,6 +33,7 @@ private:
     ASS_Renderer* mAssRenderer;
     ASS_Track* mAssTrack;
     AVSubtitle mTmpSubtitle;
+    int64_t mLastPts;
 };
 
 #endif //SSAHANDLER_H

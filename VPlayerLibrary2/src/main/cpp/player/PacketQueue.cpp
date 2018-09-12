@@ -48,7 +48,7 @@ int PacketQueue::dequeue(AVPacket *pkt, intptr_t *serial, bool block) {
     }
 }
 
-void PacketQueue::begin(AVPacket* flushPacket) {
+void PacketQueue::begin(const AVPacket* flushPacket) {
     std::lock_guard<std::mutex> lk(mMutex);
     mAbort = false;
     mSerial = 0;
@@ -104,7 +104,7 @@ int PacketQueue::enqueueEmpty() {
     return enqueue(pkt);
 }
 
-int PacketQueue::enqueueLocked(AVPacket* pkt, bool flush) {
+int PacketQueue::enqueueLocked(const AVPacket* pkt, bool flush) {
     AVPacketNode *pkt1;
     if (mAbort) {
         return AVERROR_EXIT;

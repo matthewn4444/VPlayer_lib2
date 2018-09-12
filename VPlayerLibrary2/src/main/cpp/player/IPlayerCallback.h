@@ -40,6 +40,10 @@ public:
 
     virtual void onStreamFinished() = 0;
 
+    virtual void onProgressChanged(long currentMs, long durationMs) = 0;
+
+    virtual void onPlaybackChanged(bool playing) = 0;
+
     virtual IAudioRenderer* createAudioRenderer(AVCodecContext *context) = 0;
 
     virtual bool onThreadStart() = 0;

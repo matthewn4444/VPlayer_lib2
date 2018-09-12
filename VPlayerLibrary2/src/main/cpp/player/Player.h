@@ -46,12 +46,18 @@ public:
     void onQueueEmpty(StreamComponent* component) override;
     void abort() override;
 
+    void seek(long positionMill);
+
     bool isAborting() {
         return mAbortRequested;
     }
 
     bool isPaused() {
         return mIsPaused;
+    }
+
+    int64_t getDuration() {
+        return mDurationMs;
     }
 
     void setSubtitleFrameSize(int width, int height);
@@ -75,6 +81,8 @@ private:
 
     AVPacket mFlushPkt;
     const char* mFilepath;      // TODO maybe we won't need this
+    int64_t mDurationMs;
+    long mLastSentPlaybackTimeSec;
 
     std::vector<StreamComponent*> mAVComponents;
     Clock mExtClock;

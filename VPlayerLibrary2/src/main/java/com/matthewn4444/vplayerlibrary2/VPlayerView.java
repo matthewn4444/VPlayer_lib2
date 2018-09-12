@@ -107,7 +107,6 @@ public class VPlayerView extends FrameLayout {
         mSubtitlesSurface.getHolder().addCallback(mSurfaceCallback);
         mVideoSurface.getHolder().setFormat(PixelFormat.RGBA_8888);
         mSubtitlesSurface.setZOrderMediaOverlay(true);
-        mSubtitlesSurface.setZOrderOnTop(true);
         mSubtitlesSurface.getHolder().setFormat(PixelFormat.RGBA_8888);
 
         final DisplayMetrics dm = Resources.getSystem().getDisplayMetrics();
@@ -116,6 +115,10 @@ public class VPlayerView extends FrameLayout {
 
     public void openFile(String filepath) {
         mController.open(filepath);
+    }
+
+    public void seek(long positionMill) {
+        mController.nativeSeek(positionMill);
     }
 
     public void play() {
@@ -135,6 +138,14 @@ public class VPlayerView extends FrameLayout {
 
     public boolean isPaused() {
         return mController.nativeIsPaused();
+    }
+
+    public long getDuration() {
+        return mController.nativeGetDurationMill();
+    }
+
+    public long getPlaybackTime() {
+        return mController.nativeGetPlaybackMill();
     }
 
     public void setListener(VPlayerListener listener) {

@@ -33,7 +33,8 @@ SSAHandler::SSAHandler(AVCodecID codecID) :
         mAssLibrary(NULL),
         mAssRenderer(NULL),
         mAssTrack(NULL),
-        mTmpSubtitle({0}) {
+        mTmpSubtitle({0}),
+        mLastPts(0) {
 }
 
 SSAHandler::~SSAHandler() {
@@ -105,7 +106,7 @@ int SSAHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial, bo
     ass_set_frame_size(mAssRenderer, vFrame->width, vFrame->height);
     {
         std::lock_guard<std::mutex> lk(mAssMutex);
-        image = ass_render_frame(mAssRenderer, mAssTrack, (long long int) vFrame->pts, &changed);
+        image = ass_render_frame(mAssRenderer, mAssTrack, (int64_t) vFrame->pts, &changed);
         if (force) {
             changed = 2;
         }
@@ -114,6 +115,7 @@ int SSAHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial, bo
         for (; image != NULL; image = image->next) {
             blendSSA(vFrame, image);
         }
+        mLastPts = vFrame->pts;
     }
     return changed == 2 ? 2 : 0;
 }
@@ -135,6 +137,10 @@ bool SSAHandler::areFramesPending() {
 
 void SSAHandler::invalidateFrame() {
     // Is not used
+}
+
+void SSAHandler::flush() {
+    ass_flush_events(mAssTrack);
 }
 
 bool SSAHandler::handleDecodedSubtitle(AVSubtitle* subtitle, intptr_t pktSerial) {

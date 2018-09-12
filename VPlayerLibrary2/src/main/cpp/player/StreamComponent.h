@@ -108,6 +108,7 @@ protected:
     std::condition_variable mPauseCondition;
 
     // Decoding variables
+    const AVPacket* mFlushPkt;
     AVPacket mPkt;
     intptr_t mPktSerial;
     intptr_t mFinished;
@@ -118,7 +119,6 @@ protected:
 private:
     void internalProcessThread();
     int getCodecInfo(int streamIndex, AVCodecContext** oCContext, AVCodec** oCodec);
-    AVPacket* mFlushPkt;
 
     std::mutex mErrorMutex;
     bool mIsRealTime;

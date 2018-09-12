@@ -121,10 +121,10 @@ AVDictionary **StreamComponent::getProperties(int *ret) {
             return NULL;
         }
         stream = mFContext->streams[mAvailStreamIndexes[i]];
+        propList[i] = getPropertiesOfStream(cContext, stream, codec);
         av_dict_set_int(&propList[i], "type", mType, 0);
         av_dict_set(&propList[i], "typename", typeName(), 0);
         av_dict_set_int(&propList[i], "ID", mAvailStreamIndexes[i], 0);
-        propList[i] = getPropertiesOfStream(cContext, stream, codec);
         avcodec_free_context(&cContext);
     }
     return propList;
@@ -332,10 +332,14 @@ int StreamComponent::decodeFrame(void *frame) {
             }
         } while (mPacketQueue->serial() != mPktSerial);
 
-        if (mPkt.data == mFlushPkt->data) {
+        if (pktTmp.data == mFlushPkt->data) {
+            // Received the flush packet, now it is time to flush component
             avcodec_flush_buffers(mCContext);
             mFinished = 0;
             onDecodeFlushBuffers();
+
+            // Next iteration should dequeue from the packet instead of returning
+            ret = AVERROR(EAGAIN);
         } else {
             onDecodeFrame(frame, &pktTmp, &ret);
             av_packet_unref(&pktTmp);

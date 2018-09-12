@@ -4,6 +4,8 @@ extern "C" {
 #include <libavutil/opt.h>
 }
 
+#define MS_TO_TIME_BASE (AV_TIME_BASE / 1000)
+
 #define EXTCLK_MIN_FRAMES 2
 #define EXTCLK_MAX_FRAMES 10
 
@@ -45,6 +47,8 @@ Player::Player() :
         mSubtitleFrameWidth(0),
         mSubtitleFrameHeight(0),
         mFilepath(NULL),
+        mDurationMs(0),
+        mLastSentPlaybackTimeSec(0),
         mShowVideo(true),
         mAbortRequested(false),
         mSeekRequested(false),
@@ -79,14 +83,14 @@ bool Player::openVideo(const char *stream_file_url) {
 }
 
 void Player::stepNextFrame() {
-    // Step after un-pausing the playback
-    if (mIsPaused) {
-        togglePlayback();
-    }
     if (mVideoStream) {
         mVideoStream->setFrameStepMode(true);
     } else {
         __android_log_print(ANDROID_LOG_WARN, sTag, "Setting frame step mode without video stream");
+    }
+    // Step after un-pausing the playback
+    if (mIsPaused) {
+        togglePlayback();
     }
 }
 
@@ -167,6 +171,19 @@ void Player::abort() {
     }
 }
 
+void Player::seek(long positionMill) {
+    // Seek to position, if started before duration is gained, bound it later
+    mSeekPos = std::max(positionMill, 0L);
+    if (mDurationMs) {
+        mSeekPos = std::min(mSeekPos, mDurationMs);
+    }
+    mSeekPos *= MS_TO_TIME_BASE;
+
+    mSeekRel = 0;       // TODO see if this is needed for incremental changes
+    mSeekRequested = true;
+    mReadThreadCondition.notify_one();
+}
+
 void Player::setSubtitleFrameSize(int width, int height) {
     if (width > 0 && height > 0) {
         mSubtitleFrameWidth = width;
@@ -240,6 +257,7 @@ void Player::reset() {
         av_freep(&mFilepath);        // TODO check if this is needed
     }
     mAbortRequested = false;
+    mDurationMs = 0;
 }
 
 int Player::error(int errorCode, const char *message) {
@@ -277,6 +295,7 @@ void Player::readThread() {
         __android_log_print(ANDROID_LOG_ERROR, sTag, "Cannot open file path/stream: %s", mFilepath);
         error(err, "Cannot open file/stream, does not exist");
     } else {
+        mDurationMs = context->duration / MS_TO_TIME_BASE;
         if (tOpenStreams(context) >= 0) {
             tReadLoop(context);
         }
@@ -333,6 +352,19 @@ int Player::tOpenStreams(AVFormatContext *context) {
     }
     if (mSubtitleStream) {
         mAVComponents.push_back((StreamComponent *) mSubtitleStream);
+    }
+
+    // Seek if requested before video starts
+    if (mSeekRequested) {
+        // Bound the seek position within duration
+        if (mDurationMs) {
+            mSeekPos = std::min(mSeekPos, mDurationMs * MS_TO_TIME_BASE);
+        }
+        if (avformat_seek_file(context, -1, INT64_MIN, mSeekPos, INT64_MAX, 0) < 0) {
+            __android_log_print(ANDROID_LOG_WARN, sTag, "%s: could not seek to position %0.3f",
+                                mFilepath, (double) mSeekPos / AV_TIME_BASE);
+        }
+        mSeekRequested = false;
     }
 
     // Send metadata of the video streams and container
@@ -430,6 +462,7 @@ int Player::tReadLoop(AVFormatContext *context) {
                 }
                 mExtClock.setPts(seekTarget / (double) AV_TIME_BASE);
             }
+            mLastSentPlaybackTimeSec = 0;
             mSeekRequested = false;
             mAttachmentsRequested = true;
             mIsEOF = false;
@@ -462,10 +495,25 @@ int Player::tReadLoop(AVFormatContext *context) {
 
         // Wait if paused is requested
         while (mIsPaused) {
+            if (mCallback && (!mVideoStream || !mVideoStream->inFrameStepMode())) {
+                mCallback->onPlaybackChanged(mIsPaused);
+            }
             std::unique_lock<std::mutex> lk(waitMutex);
             mPauseCondition.wait(lk, [this] {return mAbortRequested || !mIsPaused;});
             if (mAbortRequested) {
                 break;
+            }
+            if (mCallback && (!mVideoStream || !mVideoStream->inFrameStepMode())) {
+                mCallback->onPlaybackChanged(mIsPaused);
+            }
+        }
+
+        // Update play time
+        if (mCallback && !isnan(getMasterClock()->getPts())) {
+            long timeMs = (long) getMasterClock()->getPts() * MS_TO_TIME_BASE;
+            if ((timeMs / 1000) - mLastSentPlaybackTimeSec >= 1) {
+                mLastSentPlaybackTimeSec = timeMs / 1000;
+                mCallback->onProgressChanged(timeMs, mDurationMs);
             }
         }
 

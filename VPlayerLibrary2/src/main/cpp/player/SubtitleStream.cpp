@@ -40,8 +40,8 @@ int SubtitleStream::prepareSubtitleFrame(int64_t pts, double clockPts, bool forc
     if (ret < 0) {
         return ret;
     }
-    AVFrame* subTmpFrame = mFrameQueue->getNextFrame();
-    subTmpFrame->pts = pts;
+
+    AVFrame *subTmpFrame = mFrameQueue->getNextFrame(pts);
     if ((ret = blendToFrame(subTmpFrame, clockPts, force)) < 0) {
         __android_log_print(ANDROID_LOG_WARN, sTag, "Failed to blend subs to sub videoFrame");
     } else if (ret > 0) {
@@ -56,10 +56,11 @@ AVFrame *SubtitleStream::getPendingSubtitleFrame(int64_t pts) {
     if (ret < 0) {
         return NULL;
     }
+
     AVFrame *subFrame = NULL;
     while (mFrameQueue->getFirstFrame()) {
         AVFrame *f = mFrameQueue->getFirstFrame();
-        if (f == NULL || f->pts < pts) {
+        if (f == NULL || f->pts > pts) {
             break;
         }
         subFrame = mFrameQueue->dequeue();
@@ -139,6 +140,20 @@ void SubtitleStream::onDecodeFrame(void* frame, AVPacket *pkt, int *ret) {
         }
         *ret = gotFrame ? 0 : (pkt->data ? AVERROR(EAGAIN) : AVERROR_EOF);
     }
+}
+
+void SubtitleStream::onDecodeFlushBuffers() {
+    if (mFrameQueue->getWidth() > 0 && mFrameQueue->getHeight() > 0) {
+        // Remove all items when flushing if queue has been sized
+        while (mFrameQueue->getFirstFrame()) {
+            mFrameQueue->dequeue();
+        }
+
+        // Push empty frame to erase the subtitles
+        mFrameQueue->getNextFrame(0);
+        mFrameQueue->pushNextFrame();
+    }
+    mHandler->flush();
 }
 
 bool SubtitleStream::areFramesPending() {

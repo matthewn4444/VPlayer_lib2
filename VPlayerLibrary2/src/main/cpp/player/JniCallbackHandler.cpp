@@ -29,6 +29,8 @@ void JniCallbackHandler::initJni(JNIEnv *env) {
     sMethodCreateAudioTrack = getJavaMethod(env, clazz, sMethodCreateAudioTrackSpec);
     sMethodStreamReady = getJavaMethod(env, clazz, sMethodStreamReadySpec);
     sMethodStreamFinished = getJavaMethod(env, clazz, sMethodStreamFinishedSpec);
+    sMethodProgressChanged = getJavaMethod(env, clazz, sMethodProgressChangedSpec);
+    sMethodPlaybackChanged = getJavaMethod(env, clazz, sMethodPlaybackChangedSpec);
     env->DeleteLocalRef(clazz);
 
     // Hashmap class
@@ -222,6 +224,18 @@ void JniCallbackHandler::onStreamFinished() {
     JNIEnv* env = getEnv();
     std::lock_guard<std::mutex> lk(mMutex);
     env->CallVoidMethod(mInstance, sMethodStreamFinished);
+}
+
+void JniCallbackHandler::onProgressChanged(long currentMs, long durationMs) {
+    JNIEnv* env = getEnv();
+    std::lock_guard<std::mutex> lk(mMutex);
+    env->CallVoidMethod(mInstance, sMethodProgressChanged, currentMs, durationMs);
+}
+
+void JniCallbackHandler::onPlaybackChanged(bool playing) {
+    JNIEnv* env = getEnv();
+    std::lock_guard<std::mutex> lk(mMutex);
+    env->CallVoidMethod(mInstance, sMethodPlaybackChanged, playing);
 }
 
 IAudioRenderer *JniCallbackHandler::createAudioRenderer(AVCodecContext *context) {

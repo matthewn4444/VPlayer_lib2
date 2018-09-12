@@ -349,9 +349,13 @@ int VideoStream::synchronizeVideo(double *remainingTime) {
             lastvp = mQueue->peekLast();
             vp = mQueue->peekFirst();
 
+            // Just performed seek, remove all old frames after packet queue flushed
             if (vp->serial() != mPacketQueue->serial()) {
-                // TODO i think this related to seeking?
-                mQueue->peekNext();
+                if (mSubStream) {
+                    mSubStream->getPendingSubtitleFrame(vp->frame()->pts);
+                }
+                mFramePool.recycle(vp->frame());
+                mQueue->pushNext();
                 _log("VideoStream::videoProcess retry %ld %ld", vp->serial(),
                      mPacketQueue->serial());
                 continue;

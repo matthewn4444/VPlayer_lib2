@@ -20,7 +20,7 @@ public:
     ~PacketQueue();
 
     int dequeue(AVPacket *pkt, intptr_t *serial, bool block);
-    void begin(AVPacket *flushPacket);
+    void begin(const AVPacket *flushPacket);
     void abort();
     void flush();
     int flushPackets(AVPacket *flushPkt);
@@ -48,7 +48,7 @@ public:
     }
 
 private:
-    int enqueueLocked(AVPacket* pkt, bool flush);
+    int enqueueLocked(const AVPacket* pkt, bool flush);
 
     int mStreamIndex;
     AVPacketNode *mFirstPkt, *mLastPkt;

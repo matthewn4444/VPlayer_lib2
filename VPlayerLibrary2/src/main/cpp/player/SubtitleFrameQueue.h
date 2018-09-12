@@ -17,7 +17,7 @@ public:
 
     int resize(size_t size, int width, int height, AVPixelFormat format);
 
-    AVFrame* getNextFrame();
+    AVFrame* getNextFrame(int64_t pts);
 
     AVFrame* getFirstFrame();
 
@@ -32,6 +32,8 @@ public:
     int getWidth();
 
     int getHeight();
+
+    size_t size();
 
 private:
     void reset();

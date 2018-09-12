@@ -202,6 +202,14 @@ extern "C" JNIEXPORT jboolean JNICALL JAVA_EXPORT_NAME(nativeOpen) (JNIEnv *env,
     return JNI_FALSE;
 }
 
+extern "C" JNIEXPORT void JNICALL JAVA_EXPORT_NAME(nativeSeek) (JNIEnv *env, jobject instance,
+                                                                jlong positionMill) {
+    Player* player = getPlayerPtr(env, instance);
+    if (player) {
+        player->seek(positionMill);
+    }
+}
+
 extern "C" JNIEXPORT void JNICALL JAVA_EXPORT_NAME(nativePlay) (JNIEnv *env, jobject instance) {
     Player* player = getPlayerPtr(env, instance);
     if (player && player->isPaused()) {
@@ -220,4 +228,18 @@ extern "C" JNIEXPORT jboolean JNICALL JAVA_EXPORT_NAME(nativeIsPaused) (JNIEnv *
                                                                         jobject instance) {
     Player* player = getPlayerPtr(env, instance);
     return (jboolean) (player && player->isPaused() ? JNI_TRUE : JNI_FALSE);
+}
+
+extern "C" JNIEXPORT jlong JNICALL JAVA_EXPORT_NAME(nativeGetDurationMill) (JNIEnv *env,
+                                                                        jobject instance) {
+    Player* player = getPlayerPtr(env, instance);
+    return player ? player->getDuration() : 0;
+}
+
+
+extern "C" JNIEXPORT jlong JNICALL JAVA_EXPORT_NAME(nativeGetPlaybackMill) (JNIEnv *env,
+                                                                            jobject instance) {
+    Player* player = getPlayerPtr(env, instance);
+    return player && !isnan((long) player->getMasterClock())
+            ? (long) (player->getMasterClock()->getPts() * 1000) : -1;
 }

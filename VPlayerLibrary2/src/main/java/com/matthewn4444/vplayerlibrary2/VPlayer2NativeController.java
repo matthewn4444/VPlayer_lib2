@@ -231,6 +231,28 @@ public class VPlayer2NativeController {
         }
     }
 
+    private void nativeProgressChanged(final long currentMs, final long durationMs) {
+        if (mListener != null) {
+            mMainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    mListener.onProgressChanged(currentMs, durationMs);
+                }
+            });
+        }
+    }
+
+    private void nativePlaybackChanged(final boolean isPlaying) {
+        if (mListener != null) {
+            mMainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    mListener.onPlaybackChanged(isPlaying);
+                }
+            });
+        }
+    }
+
     private AudioTrack nativeCreateAudioTrack(int sampleRateHz, int numOfChannels) {
         if (AT_LEAST_N && mAudioTrack != null) {
             mAudioTrack.removeOnRoutingChangedListener(mRoutingChangedListener);
@@ -294,6 +316,8 @@ public class VPlayer2NativeController {
 
     private native void nativeSetSubtitleFrameSize(int width, int height);
 
+    native void nativeSeek(long positionMill);
+
     native void nativeSetDefaultSubtitleFont(String fontPath, String fontFamily);
 
     native void nativeRenderLastFrame();
@@ -304,8 +328,11 @@ public class VPlayer2NativeController {
 
     native void surfaceDestroyed();
 
-
     native boolean nativeIsPaused();
+
+    native long nativeGetDurationMill();
+
+    native long nativeGetPlaybackMill();
 
     protected static void log(Object... txt) {
         String returnStr = "";
