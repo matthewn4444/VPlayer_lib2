@@ -100,6 +100,10 @@ int SSAHandler::open(AVCodecContext *cContext, AVFormatContext *fContext) {
     return 0;
 }
 
+void SSAHandler::abort() {
+    // Is not needed
+}
+
 int SSAHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial, bool force) {
     ASS_Image* image;
     int changed = 0;

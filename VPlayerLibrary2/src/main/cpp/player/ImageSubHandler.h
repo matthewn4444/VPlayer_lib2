@@ -12,6 +12,8 @@ public:
 
     int open(AVCodecContext *cContext, AVFormatContext *fContext) override;
 
+    void abort() override;
+
     bool handleDecodedSubtitle(AVSubtitle *subtitle, intptr_t pktSerial) override;
 
     AVSubtitle *getSubtitle() override;

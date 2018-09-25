@@ -35,6 +35,13 @@ SubtitleStream::~SubtitleStream() {
     }
 }
 
+void SubtitleStream::abort() {
+    if (mHandler) {
+        mHandler->abort();
+    }
+    StreamComponent::abort();
+}
+
 int SubtitleStream::prepareSubtitleFrame(int64_t pts, double clockPts, bool force) {
     int ret = ensureQueue();
     if (ret < 0) {
@@ -170,7 +177,7 @@ int SubtitleStream::onProcessThread() {
         waitIfPaused();
 
         AVSubtitle* subtitle = mHandler->getSubtitle();
-        if (!subtitle || (ret = decodeFrame(subtitle)) < 0) {
+        if (!subtitle || (ret = decodeFrame(subtitle)) < 0 || hasAborted()) {
             break;
         } else if (ret && !mHandler->handleDecodedSubtitle(subtitle, mPktSerial)) {
             __android_log_print(ANDROID_LOG_WARN, sTag, "Does not support type of subtitle %d",

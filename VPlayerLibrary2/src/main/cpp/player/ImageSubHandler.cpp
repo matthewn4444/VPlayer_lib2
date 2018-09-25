@@ -43,6 +43,12 @@ int ImageSubHandler::open(AVCodecContext *cContext, AVFormatContext *fContext) {
     return 0;
 }
 
+void ImageSubHandler::abort() {
+    if (mQueue) {
+        mQueue->abort();
+    }
+}
+
 int ImageSubHandler::blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial, bool force) {
     int ret = 0;
     while (mQueue->getNumRemaining() > 0) {

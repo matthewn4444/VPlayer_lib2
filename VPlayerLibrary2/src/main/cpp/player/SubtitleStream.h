@@ -14,6 +14,7 @@ public:
         SubtitleHandlerBase(AVCodecID codecID) : codec_id(codecID) {}
         virtual ~SubtitleHandlerBase() {}
         virtual int open(AVCodecContext* cContext, AVFormatContext* fContext) = 0;
+        virtual void abort() = 0;
         virtual bool handleDecodedSubtitle(AVSubtitle *subtitle, intptr_t pktSerial) = 0;
         virtual int blendToFrame(double pts, AVFrame *vFrame, intptr_t pktSerial, bool force) = 0;
         virtual void setDefaultFont(const char* fontPath, const char* fontFamily) = 0;
@@ -27,6 +28,8 @@ public:
 
     SubtitleStream(AVFormatContext* context, AVPacket* flushPkt, ICallback* callback);
     virtual ~SubtitleStream();
+
+    virtual void abort() override;
 
     // If subtitle stream is handling its own frame, use these functions to prepare and get it
     int prepareSubtitleFrame(int64_t pts, double clockPts, bool force = false);
