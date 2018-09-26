@@ -17,11 +17,11 @@ static const char* sTag = "VideoStream";
 
 VideoStream::VideoStream(AVFormatContext* context, AVPacket* flushPkt, ICallback* callback) :
         AVComponentStream(context, AVMEDIA_TYPE_VIDEO, flushPkt, callback, VIDEO_PIC_QUEUE_SIZE),
-        mFrameStepMode(false),
         mAllowDropFrames(true),
         mInvalidateSubs(false),
         mNextFrameWritten(false),
         mVideoRenderer(NULL),
+        mVideoStreamCallback(NULL),
         mForceRefresh(false),
         mFrameTimer(0),
         mSubStream(NULL),
@@ -54,6 +54,10 @@ void VideoStream::setPaused(bool paused) {
 void VideoStream::setVideoRenderer(IVideoRenderer *videoRenderer) {
     mVideoRenderer = videoRenderer;
     spawnRendererThreadIfHaveNot();
+}
+
+void VideoStream::setVideoStreamCallback(AVComponentStream::IVideoStreamCallback *callback) {
+    mVideoStreamCallback = callback;
 }
 
 void VideoStream::setSubtitleComponent(SubtitleStream *stream) {
@@ -299,6 +303,10 @@ int VideoStream::onRenderThread() {
 
                 // Frame has been rendered and used, recycle it
                 mFramePool.recycle(vp->frame());
+
+                if (mVideoStreamCallback) {
+                    mVideoStreamCallback->onVideoRenderedFrame();
+                }
             }
             mForceRefresh = false;
         }
@@ -356,8 +364,11 @@ int VideoStream::synchronizeVideo(double *remainingTime) {
                 }
                 mFramePool.recycle(vp->frame());
                 mQueue->pushNext();
-                _log("VideoStream::videoProcess retry %ld %ld", vp->serial(),
-                     mPacketQueue->serial());
+
+                // Removed the last frame, nothing to show so invalidate it
+                if (mQueue->getNumRemaining() == 0) {
+                    invalidNextFrame();
+                }
                 continue;
             }
 
@@ -415,7 +426,8 @@ int VideoStream::synchronizeVideo(double *remainingTime) {
             if (mQueue->getNumRemaining() > 1) {
                 Frame* nextvp = mQueue->peekNext();
                 duration = getFrameDurationDiff(vp, nextvp);
-                if (!mFrameStepMode && allowFrameDrops() && now > mFrameTimer + duration) {
+                if (!mCallback->inFrameStepMode() && allowFrameDrops()
+                        && now > mFrameTimer + duration) {
                     mLateFrameDrops++;
                     __android_log_print(ANDROID_LOG_VERBOSE, sTag,
                                         "Late frame drop happened (Count: %d)", mLateFrameDrops);
@@ -429,9 +441,6 @@ int VideoStream::synchronizeVideo(double *remainingTime) {
             }
             mQueue->pushNext();
             mForceRefresh = true;
-            if (mFrameStepMode && !isPaused()) {
-                mCallback->togglePlayback();
-            }
         }
         break;
     }

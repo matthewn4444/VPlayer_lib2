@@ -26,8 +26,8 @@ public:
     int renderLastFrame();
 
 private:
-    int writeFrameToWindow(AVFrame* frame, ANativeWindow* window, ANativeWindow_Buffer& buffer);
-    int writeBufferToWindow(ANativeWindow* window, ANativeWindow_Buffer& buffer, int w, int h);
+    int writeFrameToWindow(AVFrame* f, ANativeWindow* win, ANativeWindow_Buffer& buf, bool lock);
+    int lockBufferToWindow(ANativeWindow *window, ANativeWindow_Buffer &buffer, int w, int h);
     int internalRenderFrame();
     void release();
 
@@ -38,7 +38,8 @@ private:
     ANativeWindow_Buffer mWindowBuffer;
     ANativeWindow_Buffer mSubWindowBuffer;
 
-    bool mSubWindowHasData;
+    bool mWindowWritten;
+    bool mSubWindowWritten;
 };
 
 #endif //JNIVIDEORENDERER_H

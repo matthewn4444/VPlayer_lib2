@@ -22,8 +22,8 @@ public:
         virtual double getAudioLatency() = 0;
         virtual Clock* getMasterClock() = 0;
         virtual Clock* getExternalClock() = 0;
+        virtual bool inFrameStepMode() = 0;
         virtual void updateExternalClockSpeed() = 0;
-        virtual void togglePlayback() = 0;
         virtual void onQueueEmpty(StreamComponent* component) = 0;
     };
 

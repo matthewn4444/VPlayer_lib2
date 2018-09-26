@@ -9,6 +9,11 @@ static const double AV_COMP_NOSYNC_THRESHOLD = 10.0;
 
 class AVComponentStream : public StreamComponent {
 public:
+    class IVideoStreamCallback {
+    public:
+        virtual void onVideoRenderedFrame() = 0;
+    };
+
     AVComponentStream(AVFormatContext* context, enum AVMediaType type, AVPacket* flushPkt,
                       ICallback* callback, size_t maxSize);
     virtual ~AVComponentStream();

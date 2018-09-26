@@ -13,7 +13,8 @@ static void copyRGBABuffer(const ANativeWindow_Buffer& dst, const ANativeWindow_
 JniVideoRenderer::JniVideoRenderer() :
         mWindow(NULL),
         mSubWindow(NULL),
-        mSubWindowHasData(false) {
+        mWindowWritten(false),
+        mSubWindowWritten(false) {
     mWindowBuffer.width = mWindowBuffer.height = 0;
     mSubWindowBuffer.width = mSubWindowBuffer.height = 0;
 }
@@ -48,7 +49,8 @@ void JniVideoRenderer::release() {
         ANativeWindow_release(mSubWindow);
         mSubWindow = NULL;
     }
-    mSubWindowHasData = false;
+    mSubWindowWritten = false;
+    mWindowWritten = false;
 }
 
 bool JniVideoRenderer::writeSubtitlesSeparately() {
@@ -58,17 +60,19 @@ bool JniVideoRenderer::writeSubtitlesSeparately() {
 int JniVideoRenderer::writeFrame(AVFrame* videoFrame, AVFrame* subtitleFrame) {
     std::lock_guard<std::mutex> lk(mMutex);
     if (!mWindow) return 0;
-    int ret = writeFrameToWindow(videoFrame, mWindow, mWindowBuffer);
+    int ret = writeFrameToWindow(videoFrame, mWindow, mWindowBuffer, !mWindowWritten);
     if (ret < 0) {
         __android_log_print(ANDROID_LOG_ERROR, sTag, "Unable to write video frame for render");
         return ret;
     }
+    mWindowWritten = true;
 
     if (mSubWindow && subtitleFrame) {
-        if ((ret = writeFrameToWindow(subtitleFrame, mSubWindow, mSubWindowBuffer)) < 0) {
+        if ((ret = writeFrameToWindow(subtitleFrame, mSubWindow, mSubWindowBuffer,
+                !mSubWindowWritten)) < 0) {
             __android_log_print(ANDROID_LOG_ERROR, sTag, "Unable to write sub frame for render");
         }
-        mSubWindowHasData = true;
+        mSubWindowWritten = true;
     }
     return ret;
 }
@@ -78,19 +82,20 @@ int JniVideoRenderer::renderLastFrame() {
     int ret = 0;
     ANativeWindow_Buffer buffer, subBuffer;
     if (mWindow && mWindowBuffer.width > 0 && mWindowBuffer.height) {
-        if ((ret = writeBufferToWindow(mWindow, buffer, mWindowBuffer.width,
-                                       mWindowBuffer.height)) < 0) {
+        if ((ret = lockBufferToWindow(mWindow, buffer, mWindowBuffer.width,
+                                      mWindowBuffer.height)) < 0) {
             return ret;
         }
         copyRGBABuffer(buffer, mWindowBuffer);
+        mWindowWritten = true;
     }
     if (mSubWindow && mSubWindowBuffer.width > 0 && mSubWindowBuffer.height > 0) {
-        if ((ret = writeBufferToWindow(mSubWindow, subBuffer, mSubWindowBuffer.width,
-                                       mSubWindowBuffer.height)) < 0) {
+        if ((ret = lockBufferToWindow(mSubWindow, subBuffer, mSubWindowBuffer.width,
+                                      mSubWindowBuffer.height)) < 0) {
             return ret;
         }
         copyRGBABuffer(subBuffer, mSubWindowBuffer);
-        mSubWindowHasData = true;
+        mSubWindowWritten = true;
     }
     return internalRenderFrame();
 }
@@ -101,21 +106,22 @@ int JniVideoRenderer::renderFrame() {
 }
 
 int JniVideoRenderer::writeFrameToWindow(AVFrame *frame, ANativeWindow *window,
-                                         ANativeWindow_Buffer& buffer) {
-    int ret = writeBufferToWindow(window, buffer, frame->width, frame->height);
-    if (ret < 0) {
-        return ret;
+                                         ANativeWindow_Buffer& buffer, bool lock) {
+    if (lock) {
+        int ret = lockBufferToWindow(window, buffer, frame->width, frame->height);
+        if (ret < 0) {
+            return ret;
+        }
     }
 
     int bufferLineSize = buffer.stride * 4;
     av_image_copy((uint8_t**) &buffer.bits, &bufferLineSize, (const uint8_t **) frame->data,
                   frame->linesize, (AVPixelFormat) frame->format, buffer.width, buffer.height);
-
     return 0;
 }
 
-int JniVideoRenderer::writeBufferToWindow(ANativeWindow *window, ANativeWindow_Buffer &buffer,
-                                          int width, int height) {
+int JniVideoRenderer::lockBufferToWindow(ANativeWindow *window, ANativeWindow_Buffer &buffer,
+                                         int width, int height) {
     if (!window) {
         return 0;
     }
@@ -150,12 +156,13 @@ int JniVideoRenderer::writeBufferToWindow(ANativeWindow *window, ANativeWindow_B
 
 int JniVideoRenderer::internalRenderFrame() {
     int ret = 0;
-    if (mWindow && (ret = ANativeWindow_unlockAndPost(mWindow)) < 0) {
-        return ret;
+    if (mWindow && mWindowWritten) {
+        ret = ANativeWindow_unlockAndPost(mWindow);
     }
-    if (mSubWindow && mSubWindowHasData) {
+    mWindowWritten = false;
+    if (ret >= 0 && mSubWindow && mSubWindowWritten) {
         ret = ANativeWindow_unlockAndPost(mSubWindow);
     }
-    mSubWindowHasData = false;
+    mSubWindowWritten = false;
     return ret;
 }

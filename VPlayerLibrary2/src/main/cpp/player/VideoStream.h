@@ -16,11 +16,9 @@ public:
 
     void setPaused(bool paused) override;
 
-    void setFrameStepMode(bool flag) {
-        mFrameStepMode = flag;
-    }
-
     void setVideoRenderer(IVideoRenderer* videoRenderer);
+
+    void setVideoStreamCallback(IVideoStreamCallback* callback);
 
     void setSubtitleComponent(SubtitleStream* stream);
 
@@ -32,9 +30,6 @@ public:
     bool allowFrameDrops();
 
     float getAspectRatio();
-    bool inFrameStepMode() {
-        return mFrameStepMode;
-    }
 
 protected:
     int onProcessThread() override;
@@ -53,8 +48,8 @@ private:
 
     IVideoRenderer* mVideoRenderer;
     SubtitleStream* mSubStream;
+    IVideoStreamCallback* mVideoStreamCallback;
     std::atomic<bool> mNextFrameWritten;
-    bool mFrameStepMode;
     bool mForceRefresh;
     bool mAllowDropFrames;
     bool mInvalidateSubs;

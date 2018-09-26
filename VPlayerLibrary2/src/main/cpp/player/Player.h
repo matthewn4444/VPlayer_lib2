@@ -25,7 +25,7 @@ extern "C" {
 #define _log(...) __android_log_print(ANDROID_LOG_INFO, "VPlayer2Native", __VA_ARGS__);
 #endif
 
-class Player : public StreamComponent::ICallback {
+class Player : public StreamComponent::ICallback, public AVComponentStream::IVideoStreamCallback {
 public:
     Player();
     virtual ~Player();
@@ -34,17 +34,21 @@ public:
     void stepNextFrame();
     void setVideoRenderer(IVideoRenderer* videoRenderer);
 
-    void togglePlayback() override;
     IAudioRenderer *createAudioRenderer(AVCodecContext *context) override;
     double getAudioLatency() override;
 
     Clock* getMasterClock() override;
     Clock* getExternalClock() override;
+    bool inFrameStepMode() override;
 
     void updateExternalClockSpeed() override;
 
     void onQueueEmpty(StreamComponent* component) override;
     void abort() override;
+
+    void onVideoRenderedFrame() override;
+
+    void togglePlayback();
 
     void seek(long positionMill);
 
@@ -106,6 +110,7 @@ private:
     bool mAbortRequested;
     bool mSeekRequested;
     bool mAttachmentsRequested;
+    bool mFrameStepMode;
 
     // Pause variables
     bool mIsPaused;

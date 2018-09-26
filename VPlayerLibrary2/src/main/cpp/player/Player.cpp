@@ -53,6 +53,7 @@ Player::Player() :
         mAbortRequested(false),
         mSeekRequested(false),
         mAttachmentsRequested(false),
+        mFrameStepMode(false),
         mIsPaused(false),
         mLastPaused(false),
         mSeekPos(0),
@@ -83,14 +84,11 @@ bool Player::openVideo(const char *stream_file_url) {
 }
 
 void Player::stepNextFrame() {
-    if (mVideoStream) {
-        mVideoStream->setFrameStepMode(true);
-    } else {
-        __android_log_print(ANDROID_LOG_WARN, sTag, "Setting frame step mode without video stream");
-    }
-    // Step after un-pausing the playback
+    mFrameStepMode = true;
+
+    // Step after un-pausing the playback if any pending seek is needed
     if (mIsPaused) {
-        togglePlayback();
+        mPauseCondition.notify_one();
     }
 }
 
@@ -144,6 +142,10 @@ Clock *Player::getExternalClock() {
     return &mExtClock;
 }
 
+bool Player::inFrameStepMode() {
+    return mFrameStepMode;
+}
+
 void Player::updateExternalClockSpeed() {
     int vNumPackets = mVideoStream ? mVideoStream->getPacketQueue()->numPackets() : -1;
     int aNumPackets = mAudioStream ? mAudioStream->getPacketQueue()->numPackets() : -1;
@@ -171,6 +173,16 @@ void Player::abort() {
     }
 }
 
+void Player::onVideoRenderedFrame() {
+    if (mFrameStepMode) {
+        // Once a frame has rendered and in framestep mode, turn it off and pause
+        if (!isPaused()) {
+            togglePlayback();
+        }
+        mFrameStepMode = false;
+    }
+}
+
 void Player::seek(long positionMill) {
     // Seek to position, if started before duration is gained, bound it later
     mSeekPos = std::max(positionMill, 0L);
@@ -182,6 +194,9 @@ void Player::seek(long positionMill) {
     mSeekRel = 0;       // TODO see if this is needed for incremental changes
     mSeekRequested = true;
     mReadThreadCondition.notify_one();
+    if (mIsPaused) {
+        stepNextFrame();
+    }
 }
 
 void Player::setSubtitleFrameSize(int width, int height) {
@@ -328,6 +343,7 @@ int Player::tOpenStreams(AVFormatContext *context) {
     if (mShowVideo && streamTypeExists(context, AVMEDIA_TYPE_VIDEO)) {
         mVideoStream = new VideoStream(context, &mFlushPkt, this);
         mVideoStream->setCallback(mCallback);
+        mVideoStream->setVideoStreamCallback(this);
         if (mVideoRenderer) {
             mVideoStream->setVideoRenderer(mVideoRenderer);
         }
@@ -422,7 +438,6 @@ int Player::tReadLoop(AVFormatContext *context) {
     mCallback->onStreamReady();
 
     while (!mAbortRequested) {
-
         // Handle pause/play network stream, only run when difference occurs
         if (mIsPaused != mLastPaused) {
             mLastPaused = mIsPaused;
@@ -466,9 +481,11 @@ int Player::tReadLoop(AVFormatContext *context) {
             mSeekRequested = false;
             mAttachmentsRequested = true;
             mIsEOF = false;
-            if (mIsPaused) {
-                stepNextFrame();
-            }
+        }
+
+        // Play video when framestep mode is on after seeking, stop it in videostream
+        if (mIsPaused && mFrameStepMode) {
+            togglePlayback();
         }
 
         // Send attachments to video queue
@@ -494,16 +511,18 @@ int Player::tReadLoop(AVFormatContext *context) {
         }
 
         // Wait if paused is requested
-        while (mIsPaused) {
-            if (mCallback && (!mVideoStream || !mVideoStream->inFrameStepMode())) {
+        while (mIsPaused && !mFrameStepMode) {
+            if (mCallback && !mFrameStepMode) {
                 mCallback->onPlaybackChanged(mIsPaused);
             }
             std::unique_lock<std::mutex> lk(waitMutex);
-            mPauseCondition.wait(lk, [this] {return mAbortRequested || !mIsPaused;});
+            mPauseCondition.wait(lk, [this] {
+                return mAbortRequested || !mIsPaused || mFrameStepMode;
+            });
             if (mAbortRequested) {
                 break;
             }
-            if (mCallback && (!mVideoStream || !mVideoStream->inFrameStepMode())) {
+            if (mCallback && !mFrameStepMode) {
                 mCallback->onPlaybackChanged(mIsPaused);
             }
         }
