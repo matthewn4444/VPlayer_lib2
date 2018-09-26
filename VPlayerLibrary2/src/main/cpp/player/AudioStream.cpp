@@ -138,6 +138,9 @@ int AudioStream::onRenderThread() {
             mPlaybackStateChanged = false;
         }
         waitIfRenderPaused();
+        if (hasAborted()) {
+            break;
+        }
 
         double frameDecodeStart = Clock::now();
 
