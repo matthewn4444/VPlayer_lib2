@@ -2,6 +2,7 @@
 
 #define SAMPLE_QUEUE_SIZE 9
 #define SAMPLE_CORRECTION_PERCENT_MAX 10
+#define FRAME_STEP_SLEEP_TIMEOUT 10
 
 // We use about AUDIO_DIFF_AVG_NB A-V differences to make the average
 #define AUDIO_DIFF_AVG_NB 20
@@ -46,6 +47,12 @@ AudioStream::~AudioStream() {
 void AudioStream::setPaused(bool paused) {
     mPlaybackStateChanged = true;
     AVComponentStream::setPaused(paused);
+}
+
+void AudioStream::setVolume(float gain) {
+    if (mAudioRenderer) {
+        mAudioRenderer->setVolume(gain);
+    }
 }
 
 void AudioStream::invalidateLatency() {
@@ -157,6 +164,24 @@ int AudioStream::onRenderThread() {
         } while (frame->serial() != mPacketQueue->serial());
 
         af = frame->frame();
+
+        // When frame-stepping, prevent audio to over-write the master clock (assuming video clock)
+        // and therefore sleep the thread until next audio buffer can be written
+        if (mCallback->inFrameStepMode() && getMasterClock() != getClock()
+                && getClock()->getPts() > getMasterClock()->getPts()) {
+            double beforePauseTime = Clock::now();
+            mAudioRenderer->pause();
+            while (getClock()->getPts() > getMasterClock()->getPts()
+                   || getMasterClock() != getClock()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(FRAME_STEP_SLEEP_TIMEOUT));
+                if (hasAborted()) {
+                    return 0;
+                }
+            }
+            mAudioRenderer->play();
+            frameDecodeStart -= (Clock::now() - beforePauseTime);
+        }
+
         int wantedNbSamples = syncClocks(af);
 
         // Write audio to renderer if not muted
@@ -290,8 +315,12 @@ int AudioStream::syncClocks(AVFrame* frame) {
                     maxNumSamples = ((numSamples * (100 + SAMPLE_CORRECTION_PERCENT_MAX) / 100));
                     wantedSamples = av_clip(wantedSamples, minNumSamples, maxNumSamples);
                 }
-                __android_log_print(ANDROID_LOG_VERBOSE, sTag, "diff=%f adiff=%f sample_diff=%d %f",
-                                    diff, avgDiff, wantedSamples - numSamples, diffThreshold);
+
+                if (!mCallback->inFrameStepMode()) {
+                    __android_log_print(ANDROID_LOG_VERBOSE, sTag,
+                                        "diff=%f adiff=%f sample_diff=%d %f", diff, avgDiff,
+                                        wantedSamples - numSamples, diffThreshold);
+                }
             }
         } else {
             // Too big difference : may be initial PTS errors, so reset A-V filter

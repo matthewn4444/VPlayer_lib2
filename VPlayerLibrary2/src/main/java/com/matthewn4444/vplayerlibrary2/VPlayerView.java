@@ -121,6 +121,10 @@ public class VPlayerView extends FrameLayout {
         mController.nativeSeek(positionMill);
     }
 
+    public void frameStep() {
+        mController.nativeFrameStep();
+    }
+
     public void play() {
         // Play when the surfaces are ready otherwise we will have dropped frames
         if (mVideoSurfaceCreated && mSubtitleSurfaceCreated) {

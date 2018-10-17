@@ -10,6 +10,7 @@ public:
     virtual int play() = 0;
     virtual int flush() = 0;
     virtual int stop() = 0;
+    virtual int setVolume(float gain) = 0;
 
     virtual int numChannels() = 0;
     virtual int sampleRate() = 0;
@@ -22,6 +23,9 @@ public:
      */
     virtual double getLatency() = 0;
     virtual double updateLatency(bool force = false) = 0;
+
+    static const int SUCCESS = 0;
+    static const int ERROR_INVALID_OPERATION = -3;
 };
 
 #endif //IAUDIORENDERER_H

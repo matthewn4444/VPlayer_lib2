@@ -84,11 +84,13 @@ bool Player::openVideo(const char *stream_file_url) {
 }
 
 void Player::stepNextFrame() {
-    mFrameStepMode = true;
+    if (mShowVideo) {
+        mFrameStepMode = true;
 
-    // Step after un-pausing the playback if any pending seek is needed
-    if (mIsPaused) {
-        mPauseCondition.notify_one();
+        // Step after un-pausing the playback if any pending seek is needed
+        if (mIsPaused) {
+            mPauseCondition.notify_one();
+        }
     }
 }
 
@@ -132,6 +134,9 @@ double Player::getAudioLatency() {
 }
 
 Clock *Player::getMasterClock() {
+    if (mFrameStepMode && mVideoStream) {
+        return mVideoStream->getClock();
+    }
     if (mAudioStream) {
         return mAudioStream->getClock();
     }
@@ -485,6 +490,9 @@ int Player::tReadLoop(AVFormatContext *context) {
 
         // Play video when framestep mode is on after seeking, stop it in videostream
         if (mIsPaused && mFrameStepMode) {
+            if (mAudioStream) {
+                mAudioStream->setVolume(0);
+            }
             togglePlayback();
         }
 

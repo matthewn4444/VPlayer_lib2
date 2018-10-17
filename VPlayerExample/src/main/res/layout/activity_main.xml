@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:theme="@style/AppTheme"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -7,6 +8,22 @@
         android:id="@+id/video"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
+
+    <LinearLayout
+        android:id="@+id/top_controls_layout"
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <Button
+            android:id="@+id/next_frame_button"
+            android:drawableStart="@drawable/ic_skip_next_black_24dp"
+            android:text="@string/media_controls_next_frame"
+            android:contentDescription="@string/media_controls_next_frame"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+    </LinearLayout>
 
     <ImageButton
         android:id="@+id/pauseplay"

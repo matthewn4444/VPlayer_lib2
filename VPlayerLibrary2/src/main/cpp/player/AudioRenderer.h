@@ -12,6 +12,7 @@ static JavaMethod sMethodAudioTrackPauseSpec = {"pause", "()V"};
 static JavaMethod sMethodAudioTrackPlaySpec = {"play", "()V"};
 static JavaMethod sMethodAudioTrackFlushSpec = {"flush", "()V"};
 static JavaMethod sMethodAudioTrackStopSpec = {"stop", "()V"};
+static JavaMethod sMethodAudioTrackSetVolumeSpec = {"setVolume", "(F)I"};
 static JavaMethod sMethodAudioTrackReleaseSpec = {"release", "()V"};
 static JavaMethod sMethodAudioTrackChannelCountSpec = {"getChannelCount", "()I"};
 static JavaMethod sMethodAudioTrackGetSampleRateSpec = {"getSampleRate", "()I"};
@@ -27,6 +28,7 @@ static jmethodID sMethodAudioTrackGetSampleRate;
 static jmethodID sMethodAudioTrackGetLatency;
 static jmethodID sMethodAudioTrackGetTimestamp;
 static jmethodID sMethodAudioTrackStop;
+static jmethodID sMethodAudioTrackSetVolume;
 static jmethodID sMethodAudioTrackRelease;
 
 // AudioTimestamp
@@ -52,6 +54,7 @@ public:
     int play() override;
     int flush() override;
     int stop() override;
+    int setVolume(float gain) override;
 
     int release(JNIEnv* env);
 

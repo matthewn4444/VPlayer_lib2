@@ -40,6 +40,7 @@ void AudioRenderer::initJni(JNIEnv *env) {
     sMethodAudioTrackGetTimestamp = getJavaMethod(env, clazz, sMethodAudioTrackGetTimestampSpec);
     sMethodAudioTrackGetLatency = getJavaMethod(env, clazz, sMethodAudioTrackGetLatencySpec);
     sMethodAudioTrackStop = getJavaMethod(env, clazz, sMethodAudioTrackStopSpec);
+    sMethodAudioTrackSetVolume = getJavaMethod(env, clazz, sMethodAudioTrackSetVolumeSpec);
     sMethodAudioTrackRelease = getJavaMethod(env, clazz, sMethodAudioTrackReleaseSpec);
     env->DeleteLocalRef(clazz);
 
@@ -148,6 +149,15 @@ int AudioRenderer::stop() {
     }
     env->CallVoidMethod(instance, sMethodAudioTrackStop);
     return 0;
+}
+
+int AudioRenderer::setVolume(float gain) {
+    std::lock_guard<std::mutex> lk(mMutex);
+    JNIEnv* env = mJniHandler->getEnv();
+    if (!env) {
+        return -1;
+    }
+    return env->CallIntMethod(instance, sMethodAudioTrackSetVolume, gain) == SUCCESS ? 0 : -1;
 }
 
 int AudioRenderer::release(JNIEnv* env) {

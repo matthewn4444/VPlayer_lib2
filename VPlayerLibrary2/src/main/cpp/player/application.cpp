@@ -210,6 +210,14 @@ extern "C" JNIEXPORT void JNICALL JAVA_EXPORT_NAME(nativeSeek) (JNIEnv *env, job
     }
 }
 
+extern "C" JNIEXPORT void JNICALL JAVA_EXPORT_NAME(nativeFrameStep) (JNIEnv *env,
+                                                                     jobject instance) {
+    Player* player = getPlayerPtr(env, instance);
+    if (player) {
+        player->stepNextFrame();
+    }
+}
+
 extern "C" JNIEXPORT void JNICALL JAVA_EXPORT_NAME(nativePlay) (JNIEnv *env, jobject instance) {
     Player* player = getPlayerPtr(env, instance);
     if (player && player->isPaused()) {

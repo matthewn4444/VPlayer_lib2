@@ -14,6 +14,7 @@ public:
 
     void setPaused(bool paused) override;
 
+    void setVolume(float gain);
     void invalidateLatency();
     double getLatency();
 

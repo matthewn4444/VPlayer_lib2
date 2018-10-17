@@ -318,6 +318,8 @@ public class VPlayer2NativeController {
 
     native void nativeSeek(long positionMill);
 
+    native void nativeFrameStep();
+
     native void nativeSetDefaultSubtitleFont(String fontPath, String fontFamily);
 
     native void nativeRenderLastFrame();

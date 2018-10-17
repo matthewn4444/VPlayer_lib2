@@ -5,6 +5,7 @@ import android.os.Environment;
 import android.support.annotation.NonNull;
 import android.support.v4.content.ContextCompat;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.SeekBar;
 import android.widget.Toast;
@@ -20,6 +21,7 @@ public class MainActivity extends BaseActivity {
     private VPlayerView mVideoView;
     private ImageButton mPausePlay;
     private SeekBar mSeekBar;
+    private Button mNextFrameButton;
 
     private boolean mPausedBeforeLeave;
 
@@ -30,6 +32,7 @@ public class MainActivity extends BaseActivity {
         mVideoView = findViewById(R.id.video);
         mPausePlay = findViewById(R.id.pauseplay);
         mSeekBar = findViewById(R.id.seekbar);
+        mNextFrameButton = findViewById(R.id.next_frame_button);
         mVideoView.setListener(new VPlayerListener() {
             @Override
             public void onMetadataReady(@NonNull Map<String, String>[] metadataList) {
@@ -109,6 +112,15 @@ public class MainActivity extends BaseActivity {
             }
         });
         mSeekBar.setEnabled(false);
+
+        mNextFrameButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mVideoView.frameStep();
+            }
+        });
+
+        mVideoView.seek(362049);
     }
 
     @Override
