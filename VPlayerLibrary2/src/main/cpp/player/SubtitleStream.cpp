@@ -200,7 +200,7 @@ int SubtitleStream::ensureQueue() {
         setFrameSize(width, height);
     }
     if (mPendingWidth != mFrameQueue->getWidth() || mPendingHeight != mFrameQueue->getHeight()) {
-        if ((ret = mFrameQueue->resize(VIDEO_PIC_QUEUE_SIZE, mPendingWidth, mPendingHeight,
+        if ((ret = mFrameQueue->resize(VIDEO_PIC_QUEUE_SIZE + 1, mPendingWidth, mPendingHeight,
                                        AV_PIX_FMT_RGBA)) < 0) {
             __android_log_print(ANDROID_LOG_ERROR, sTag, "Unable to create subtitle queue");
         } else if (mHandler != NULL) {
