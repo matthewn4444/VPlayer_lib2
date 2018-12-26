@@ -20,6 +20,7 @@ AudioStream::AudioStream(AVFormatContext* context, AVPacket* flushPkt, ICallback
         mStartPts(AV_NOPTS_VALUE),
         mLatencyInvalidated(false),
         mIsMuted(false),
+        mMuteRequested(false),
         mPlaybackStateChanged(false),
         mDiffComputation(0),
         mDiffAvgCoef(exp(log(0.01) / AUDIO_DIFF_AVG_NB)),
@@ -49,9 +50,10 @@ void AudioStream::setPaused(bool paused) {
     AVComponentStream::setPaused(paused);
 }
 
-void AudioStream::setVolume(float gain) {
-    if (mAudioRenderer) {
-        mAudioRenderer->setVolume(gain);
+void AudioStream::setMute(bool mute) {
+    if (mIsMuted != mute) {
+        mMuteRequested = true;
+        mIsMuted = mute;
     }
 }
 
@@ -149,6 +151,16 @@ int AudioStream::onRenderThread() {
             break;
         }
 
+        // Mute if needed
+        if (mMuteRequested) {
+            if (mIsMuted) {
+                mAudioRenderer->setVolume(0);
+            } else {
+                mAudioRenderer->setVolume(1);
+            }
+            mMuteRequested = false;
+        }
+
         double frameDecodeStart = Clock::now();
 
         // Get next frame
@@ -201,10 +213,17 @@ int AudioStream::onRenderThread() {
                 }
                 if (ret < 0) {
                     return error(ret, "Failed to write from audio renderer");
+                } else if (ret == 0 && written == 0) {
+                    // TODO if this gets hit a lot on purpose remove this
+                    return error(-1, "Failed to write any data to audio renderer");
                 }
                 written += ret;
                 size -= FFMAX(ret, 0);
             }
+        } else {
+            // Calculate the time to wait for a write operation to normally finish
+            int time = (int) (wantedNbSamples * (1000.0 / mAudioRenderer->sampleRate()));
+            std::this_thread::sleep_for(std::chrono::milliseconds(time));
         }
 
         // Update audio clock
@@ -253,7 +272,7 @@ int AudioStream::decodeAudioFrame(AVFrame* af, int wantedNbSamples, uint8_t **ou
         float sampleDivision = (float) sampleRate / af->sample_rate;
         int outCount = (int) (wantedNbSamples * sampleDivision + 256);
         int outSize = av_samples_get_buffer_size(NULL, numChannels, outCount, format, 0);
-        if (mBufferSize != outSize) {
+        if (mBufferSize < outSize) {
             if (outSize < 0) {
                 return error(-1, "av_samples_get_buffer_size() failed");
             }

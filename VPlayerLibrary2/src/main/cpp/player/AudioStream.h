@@ -14,7 +14,7 @@ public:
 
     void setPaused(bool paused) override;
 
-    void setVolume(float gain);
+    void setMute(bool mute);
     void invalidateLatency();
     double getLatency();
 
@@ -36,6 +36,7 @@ private:
 
     IAudioRenderer* mAudioRenderer;
     bool mIsMuted;
+    bool mMuteRequested;
     bool mLatencyInvalidated;
     bool mPlaybackStateChanged;
 

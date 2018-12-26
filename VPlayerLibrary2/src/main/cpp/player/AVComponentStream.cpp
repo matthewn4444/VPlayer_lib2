@@ -34,7 +34,7 @@ int AVComponentStream::open() {
     int ret = StreamComponent::open();
     if (ret >= 0) {
         mClock = new Clock(&mPacketQueue->serial());
-        mQueue = new FrameQueue(true /* isAVQueue */, mQueueMaxSize);
+        mQueue = new FrameQueue(type(), mQueueMaxSize);
     }
     return ret;
 }

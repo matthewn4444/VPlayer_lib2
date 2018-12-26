@@ -12,7 +12,7 @@
 
 class FrameQueue {          // TODO use deque c++ object
 public:
-    FrameQueue(bool isAVQueue, size_t maxSize);
+    FrameQueue(int mediatype, size_t maxSize);
     ~FrameQueue();
 
     void abort();

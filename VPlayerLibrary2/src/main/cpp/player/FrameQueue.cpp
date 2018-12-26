@@ -1,17 +1,17 @@
 #include "FrameQueue.h"
 static const char* sTag = "FrameQueue";
 
-FrameQueue::FrameQueue(bool isAVQueue, size_t maxSize) :
+FrameQueue::FrameQueue(int mediatype, size_t maxSize) :
         mReadIndex(0),
         mWriteIndex(0),
         mSize(0),
         mMaxSize(FFMIN(maxSize, MAX_FRAME_QUEUE_SIZE)),
         mReadIndexShown(0),
         mAbort(false),
-        mKeepLast(isAVQueue) {
+        mKeepLast(mediatype == AVMEDIA_TYPE_VIDEO || mediatype == AVMEDIA_TYPE_AUDIO) {
     mQueue.reserve(mMaxSize);
     for (int i = 0; i < mMaxSize; i++) {
-        Frame* f = new Frame(isAVQueue);
+        Frame* f = new Frame(mediatype);
         mQueue.push_back(f);
     }
 }

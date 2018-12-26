@@ -17,7 +17,6 @@ public:
     int resize(size_t size, int width, int height, enum AVPixelFormat format);
 
     AVFrame* acquire();
-    void recycle(AVFrame* frame);
 
 private:
     void reset();

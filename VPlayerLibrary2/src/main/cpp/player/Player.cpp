@@ -14,6 +14,9 @@ extern "C" {
 #define EXTCLK_SPEED_MAX  1.010
 #define EXTCLK_SPEED_STEP 0.001
 
+/* seek threshold is about 1/1000 of the video's duration */
+#define SEEK_THRESHOLD_RATIO 0.001
+
 #define MAX_QUEUE_SIZE (15 * 1024 * 1024)
 #define sTag "NativePlayer"
 
@@ -52,6 +55,7 @@ Player::Player() :
         mShowVideo(true),
         mAbortRequested(false),
         mSeekRequested(false),
+        mWaitingFrameAfterSeek(false),
         mAttachmentsRequested(false),
         mFrameStepMode(false),
         mIsPaused(false),
@@ -86,6 +90,9 @@ bool Player::openVideo(const char *stream_file_url) {
 void Player::stepNextFrame() {
     if (mShowVideo) {
         mFrameStepMode = true;
+        if (mAudioStream) {
+            mAudioStream->setMute(true);
+        }
 
         // Step after un-pausing the playback if any pending seek is needed
         if (mIsPaused) {
@@ -180,27 +187,54 @@ void Player::abort() {
 
 void Player::onVideoRenderedFrame() {
     if (mFrameStepMode) {
+        mFrameStepMode = false;
+
         // Once a frame has rendered and in framestep mode, turn it off and pause
         if (!isPaused()) {
             togglePlayback();
         }
-        mFrameStepMode = false;
+
+        // Finished seek while paused
+        if (!mSeekRequested && mAudioStream) {
+            mAudioStream->setMute(false);
+        }
     }
+
+    // Finished seek while playing
+    if (!mSeekRequested && mSeekPos != 0) {
+        if (mAudioStream) {
+            mAudioStream->setMute(false);
+        }
+    }
+    mWaitingFrameAfterSeek = false;
 }
 
 void Player::seek(long positionMill) {
     // Seek to position, if started before duration is gained, bound it later
-    mSeekPos = std::max(positionMill, 0L);
+    long requested = std::max(positionMill, 0L);
     if (mDurationMs) {
-        mSeekPos = std::min(mSeekPos, mDurationMs);
+        requested = std::min(requested, mDurationMs);
     }
-    mSeekPos *= MS_TO_TIME_BASE;
+    requested *= MS_TO_TIME_BASE;
 
+    // Detect if there is any change in seek time
+    double seekDiffMicroSec = abs(mSeekPos - requested);
+    double seekThresholdMicroSec = mDurationMs * SEEK_THRESHOLD_RATIO * MS_TO_TIME_BASE;
+    if (seekDiffMicroSec < seekThresholdMicroSec) {
+        mSeekPos = requested;
+        return;
+    }
+
+    // This seek is different than before
+    mSeekPos = requested;
     mSeekRel = 0;       // TODO see if this is needed for incremental changes
     mSeekRequested = true;
     mReadThreadCondition.notify_one();
     if (mIsPaused) {
         stepNextFrame();
+    }
+    if (mAudioStream) {
+        mAudioStream->setMute(true);
     }
 }
 
@@ -465,7 +499,7 @@ int Player::tReadLoop(AVFormatContext *context) {
 #endif
 
         // Handle seek
-        if (mSeekRequested) {
+        if (mSeekRequested && !mWaitingFrameAfterSeek) {
             int64_t seekTarget = mSeekPos;
             int64_t seekMin = mSeekRel > 0 ? seekTarget - mSeekRel + 2 : INT64_MIN;
             int64_t seekMax = mSeekRel < 0 ? seekTarget - mSeekRel - 2 : INT64_MAX;
@@ -486,13 +520,14 @@ int Player::tReadLoop(AVFormatContext *context) {
             mSeekRequested = false;
             mAttachmentsRequested = true;
             mIsEOF = false;
+            mWaitingFrameAfterSeek = true;
+            if (mIsPaused) {
+                stepNextFrame();
+            }
         }
 
         // Play video when framestep mode is on after seeking, stop it in videostream
         if (mIsPaused && mFrameStepMode) {
-            if (mAudioStream) {
-                mAudioStream->setVolume(0);
-            }
             togglePlayback();
         }
 

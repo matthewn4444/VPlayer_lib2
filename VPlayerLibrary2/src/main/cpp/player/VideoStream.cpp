@@ -241,7 +241,6 @@ int VideoStream::onProcessThread() {
         frame->setAVFrame(rgbaFrame, frameRate, tb, mPktSerial);
         mQueue->push();
         av_frame_unref(avFrame);
-        av_frame_unref(rgbaFrame);
     }
     av_frame_free(&avFrame);
     __android_log_print(ANDROID_LOG_VERBOSE, sTag, "onProcessThread video ended");
@@ -301,9 +300,6 @@ int VideoStream::onRenderThread() {
                 mNextFrameWritten = false;
                 vp->flipVertical = vp->frame()->linesize[0] < 0;
 
-                // Frame has been rendered and used, recycle it
-                mFramePool.recycle(vp->frame());
-
                 if (mVideoStreamCallback) {
                     mVideoStreamCallback->onVideoRenderedFrame();
                 }
@@ -362,7 +358,6 @@ int VideoStream::synchronizeVideo(double *remainingTime) {
                 if (mSubStream) {
                     mSubStream->getPendingSubtitleFrame(vp->frame()->pts);
                 }
-                mFramePool.recycle(vp->frame());
                 mQueue->pushNext();
 
                 // Removed the last frame, nothing to show so invalidate it
@@ -435,7 +430,6 @@ int VideoStream::synchronizeVideo(double *remainingTime) {
                     if (mSubStream) {
                         mSubStream->getPendingSubtitleFrame(vp->frame()->pts);
                     }
-                    mFramePool.recycle(vp->frame());
                     continue;
                 }
             }

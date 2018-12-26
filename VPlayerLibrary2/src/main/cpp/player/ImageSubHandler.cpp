@@ -39,7 +39,7 @@ int ImageSubHandler::open(AVCodecContext *cContext, AVFormatContext *fContext) {
     if (mQueue) {
         delete mQueue;
     }
-    mQueue = new FrameQueue(false /* isAVQueue */, SUBPICTURE_QUEUE_SIZE);
+    mQueue = new FrameQueue(AVMEDIA_TYPE_SUBTITLE, SUBPICTURE_QUEUE_SIZE);
     return 0;
 }
 

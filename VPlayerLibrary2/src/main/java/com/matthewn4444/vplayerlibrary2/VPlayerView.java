@@ -50,7 +50,7 @@ public class VPlayerView extends FrameLayout {
                        mSubtitlesSurface.getHolder().getSurface());
                 if (mPlayWhenSurfacesReady) {
                     mPlayWhenSurfacesReady = false;
-                    mController.play();
+                    mController.nativePlay();
                 } else {
                     // When returning back, player needs render frames on new surfaces
                     AsyncTask.execute(new Runnable() {
@@ -129,7 +129,7 @@ public class VPlayerView extends FrameLayout {
         // Play when the surfaces are ready otherwise we will have dropped frames
         if (mVideoSurfaceCreated && mSubtitleSurfaceCreated) {
             mPlayWhenSurfacesReady = false;
-            mController.play();
+            mController.nativePlay();
         } else {
             mPlayWhenSurfacesReady = true;
         }
@@ -137,7 +137,7 @@ public class VPlayerView extends FrameLayout {
 
     public void pause() {
         mPlayWhenSurfacesReady = false;
-        mController.pause();
+        mController.nativePause();
     }
 
     public boolean isPaused() {

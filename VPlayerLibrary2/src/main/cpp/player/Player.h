@@ -109,6 +109,7 @@ private:
 
     bool mAbortRequested;
     bool mSeekRequested;
+    bool mWaitingFrameAfterSeek;
     bool mAttachmentsRequested;
     bool mFrameStepMode;
 

@@ -8,7 +8,7 @@ extern "C" {
 
 class Frame {
 public:
-    Frame(bool useAVFrame);
+    Frame(int mediatype);
     ~Frame();
 
     bool reset();
@@ -65,7 +65,7 @@ private:
     // TODO try to simply this
     AVFrame* mFrame;
     AVSubtitle mSubtitle;
-    const bool mIsAVFrame;
+    const int mMediaType;
 
     // AVFrame usage
     AVRational mSar;

@@ -21,7 +21,7 @@ int AvFramePool::resize(size_t size, int width, int height, AVPixelFormat format
                 __android_log_print(ANDROID_LOG_ERROR, sTag, "Unable to allocate frame in pool");
                 return AVERROR(ENOMEM);
             }
-            if ((ret = av_image_alloc(frame->data, frame->linesize,width, height, format, 1)) < 0) {
+            if ((ret = av_image_alloc(frame->data, frame->linesize,width, height, format, 16)) < 0) {
                 __android_log_print(ANDROID_LOG_ERROR, sTag,
                                     "Unable to allocate frame data in pool");
                 av_frame_free(&frame);
@@ -47,13 +47,6 @@ AVFrame *AvFramePool::acquire() {
         mFrameNextIndex = 0;
     }
     return frame;
-}
-
-void AvFramePool::recycle(AVFrame* frame) {
-    av_frame_move_ref(mFrames[mFrameEmptyIndex], frame);
-    if (++mFrameEmptyIndex >= mFrames.size()) {
-        mFrameEmptyIndex = 0;
-    }
 }
 
 void AvFramePool::reset() {
