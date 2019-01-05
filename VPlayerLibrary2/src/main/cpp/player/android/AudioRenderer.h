@@ -1,9 +1,9 @@
 #ifndef AUDIOTRACK_H
 #define AUDIOTRACK_H
 
-#include <android/log.h>
 #include <mutex>
 #include "JniCallbackHandler.h"
+#include "../IAudioRenderer.h"
 
 // AudioTrack
 static const char* sAudioTrackClassName = "android/media/AudioTrack";

@@ -6,29 +6,19 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 }
 
-typedef struct {
-    const char* name;
-    const char* signature;
-} JavaField, JavaMethod;
-
-#include <map>
-#include <thread>
-#include <mutex>
-#include <android/log.h>
-#include <jni.h>
-#include "IPlayerCallback.h"
+#include "JniHelper.h"
 #include "AudioRenderer.h"
+#include "../IPlayerCallback.h"
 
-#define JAVA_PKG_PATH "com/matthewn4444/vplayerlibrary2"
 static const char* sControllerClassName = JAVA_PKG_PATH "/VPlayer2NativeController";
 
 // HashMap
 static const char* sHashMapClassName = "java/util/HashMap";
-static JavaMethod sMethodMapPutSpec = {"put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"};
+static const JavaMethod sMethodMapPutSpec = {"put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"};
 static jmethodID sMethodMapPut;
 static jmethodID sMethodHashMapDefaultConstructor;
 
-static JavaMethod sMethodDefaultConstSpec = {"<init>", "()V"};
+static const JavaMethod sMethodDefaultConstSpec = {"<init>", "()V"};
 static const JavaMethod sMethodNativeErrorSpec = {"nativeStreamError", "(ILjava/lang/String;)V"};
 static const JavaMethod sMethodMetadataReadySpec = {"nativeMetadataReady", "([Ljava/util/Map;)V"};
 static const JavaMethod sMethodCreateAudioTrackSpec = {"nativeCreateAudioTrack", "(II)Landroid/media/AudioTrack;"};
@@ -44,27 +34,16 @@ static jmethodID sMethodStreamFinished;
 static jmethodID sMethodProgressChanged;
 static jmethodID sMethodPlaybackChanged;
 
-jfieldID getJavaField(JNIEnv *env, jclass clazz, JavaField field);
-jfieldID getStaticJavaField(JNIEnv *env, jclass clazz, JavaField field);
-jmethodID getJavaMethod(JNIEnv *env, jclass clazz, JavaMethod method);
-jmethodID getStaticJavaMethod(JNIEnv *env, jclass clazz, JavaMethod method);
-
 class AudioRenderer;
 
-class JniCallbackHandler : public IPlayerCallback {
+class JniCallbackHandler : public IPlayerCallback, public JniHelper {
 public:
     static void initJni(JNIEnv *env);
 
-    JniCallbackHandler(JavaVM* vm, jobject instance);
-    ~JniCallbackHandler();
+    JniCallbackHandler(JNIEnv *env, jobject instance);
+    virtual ~JniCallbackHandler();
 
-    jobject makeInstanceGlobalRef(JNIEnv* env);
-    void deleteInstanceGlobalRef(JNIEnv* env);
-
-    JNIEnv* attachToThisThread();
-    void detachFromThisThread();
-
-    JNIEnv* getEnv();
+    void deleteInstanceGlobalRef(JNIEnv* env) override;
 
     void onError(int, const char*, const char*) override;
     void onMetadataReady(AVDictionary*, AVDictionary**, size_t, AVDictionary**, size_t,
@@ -78,13 +57,9 @@ public:
 
     bool onThreadStart() override;
     void onThreadEnd() override;
+
 private:
     AudioRenderer* mAudioRenderer;
-    std::map<std::thread::id, JNIEnv*> mEnvLookup;
-    JavaVM* mJavaVM;
-    jobject mInstance;
-    std::mutex mMutex;
-    bool mHasGlobalRef;
 };
 
 #endif //VPLAYER_LIB2_JNIERRORHANDLER_H

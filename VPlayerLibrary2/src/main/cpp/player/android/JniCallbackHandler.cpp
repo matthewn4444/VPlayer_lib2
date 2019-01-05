@@ -1,25 +1,8 @@
 #include "JniCallbackHandler.h"
 
 #define sTag "JniCallbackHandler"
-#define _log(...) __android_log_print(ANDROID_LOG_INFO, "VPlayer2Native", __VA_ARGS__);
 
 static const char* sCannotAllocMetadataError = "Cannot send metadata because cannot allocate map";
-
-jfieldID getJavaField(JNIEnv* env, jclass clazz, JavaField field) {
-    return env->GetFieldID(clazz, field.name, field.signature);
-}
-
-jfieldID getStaticJavaField(JNIEnv* env, jclass clazz, JavaField field) {
-    return env->GetStaticFieldID(clazz, field.name, field.signature);
-}
-
-jmethodID getJavaMethod(JNIEnv *env, jclass clazz, JavaMethod method) {
-    return env->GetMethodID(clazz, method.name, method.signature);
-}
-
-jmethodID getStaticJavaMethod(JNIEnv *env, jclass clazz, JavaMethod method) {
-    return env->GetStaticMethodID(clazz, method.name, method.signature);
-}
 
 void JniCallbackHandler::initJni(JNIEnv *env) {
     // Video Controller class
@@ -60,27 +43,16 @@ const static jobject getHashMapFromAVDictionary(JNIEnv* env, AVDictionary* dicti
     return map;
 }
 
-JniCallbackHandler::JniCallbackHandler(JavaVM* vm, jobject instance) :
-        mJavaVM(vm),
-        mInstance(instance),
-        mAudioRenderer(NULL),
-        mHasGlobalRef(false) {
+JniCallbackHandler::JniCallbackHandler(JNIEnv *env, jobject instance) :
+        JniHelper(env, instance),
+        mAudioRenderer(NULL) {
 }
 
 JniCallbackHandler::~JniCallbackHandler() {
 }
 
-jobject JniCallbackHandler::makeInstanceGlobalRef(JNIEnv *env) {
-    std::lock_guard<std::mutex> lk(mMutex);
-    if (env && !mHasGlobalRef) {
-        mInstance = env->NewGlobalRef(mInstance);
-        mHasGlobalRef = true;
-        return mInstance;
-    }
-    return NULL;
-}
-
 void JniCallbackHandler::deleteInstanceGlobalRef(JNIEnv *env) {
+    JniHelper::deleteInstanceGlobalRef(env);
     std::lock_guard<std::mutex> lk(mMutex);
     if (mAudioRenderer) {
         if (env) {
@@ -92,50 +64,6 @@ void JniCallbackHandler::deleteInstanceGlobalRef(JNIEnv *env) {
         }
         delete mAudioRenderer;
         mAudioRenderer = NULL;
-    }
-    if (mHasGlobalRef) {
-        if (env) {
-            env->DeleteGlobalRef(mInstance);
-        } else {
-            __android_log_print(ANDROID_LOG_ERROR, sTag,
-                                "Cannot delete global reference to instance!");
-        }
-        mHasGlobalRef = false;
-        mInstance = NULL;
-    }
-}
-
-JNIEnv *JniCallbackHandler::attachToThisThread() {
-    JNIEnv* env = getEnv();
-    if (env) {
-        return env;
-    }
-    std::lock_guard<std::mutex> lk(mMutex);
-    std::thread::id id = std::this_thread::get_id();
-    switch (mJavaVM->GetEnv((void**)&env, JNI_VERSION_1_6)) {
-        case JNI_OK:
-            break;
-        case JNI_EDETACHED:
-            if (mJavaVM->AttachCurrentThread(&env, NULL) != 0) {
-                __android_log_print(ANDROID_LOG_ERROR, sTag, "JNI cannot attach to thread");
-            }
-            mEnvLookup[id] = env;
-            return env;
-        case JNI_EVERSION:
-            __android_log_print(ANDROID_LOG_ERROR, sTag, "Bad java version");
-            break;
-        default:
-            __android_log_print(ANDROID_LOG_ERROR, sTag, "Unknown ");
-            break;
-    }
-    return NULL;
-}
-
-void JniCallbackHandler::detachFromThisThread() {
-    if (getEnv()) {
-        std::lock_guard<std::mutex> lk(mMutex);
-        mEnvLookup.erase(std::this_thread::get_id());
-        mJavaVM->DetachCurrentThread();
     }
 }
 
@@ -274,16 +202,6 @@ IAudioRenderer *JniCallbackHandler::createAudioRenderer(AVCodecContext *context)
         return NULL;
     }
     return mAudioRenderer = renderer;
-}
-
-JNIEnv *JniCallbackHandler::getEnv() {
-    std::lock_guard<std::mutex> lk(mMutex);
-    std::thread::id id = std::this_thread::get_id();
-    std::map<std::thread::id, JNIEnv*>::iterator it = mEnvLookup.find(id);
-    if (it != mEnvLookup.end()) {
-        return it->second;
-    }
-    return NULL;
 }
 
 bool JniCallbackHandler::onThreadStart() {

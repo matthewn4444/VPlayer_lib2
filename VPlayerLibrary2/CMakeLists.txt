@@ -31,30 +31,29 @@ include_directories( ${libyuv_DIR}/include )
 add_definitions(-DCONFIG_RTSP_DEMUXER)
 
 add_library(application SHARED
-             src/main/cpp/player/application.cpp
-              src/main/cpp/player/JniCallbackHandler.cpp
-              src/main/cpp/player/JniVideoRenderer.cpp
-              src/main/cpp/player/AudioRenderer.cpp
-              src/main/cpp/player/StreamComponent.cpp
-              src/main/cpp/player/AVComponentStream.cpp
-              src/main/cpp/player/AvFramePool.cpp
-              src/main/cpp/player/VideoStream.cpp
-              src/main/cpp/player/AudioStream.cpp
-              src/main/cpp/player/SubtitleFrameQueue.cpp
-              src/main/cpp/player/SubtitleStream.cpp
-              src/main/cpp/player/SSAHandler.cpp
-              src/main/cpp/player/convert.cpp
-              src/main/cpp/player/ImageSubHandler.cpp
-              src/main/cpp/player/BasicYUVConverter.cpp
-              src/main/cpp/player/YUV16to8Converter.cpp
-              src/main/cpp/player/Frame.cpp
-              src/main/cpp/player/FrameQueue.cpp
-              src/main/cpp/player/PacketQueue.cpp
-              src/main/cpp/player/Clock.cpp
-              src/main/cpp/player/Player.cpp)
-
-#target_include_directories(application PRIVATE
-                         #${ffmpeg_DIR}/include)
+            src/main/cpp/player/StreamComponent.cpp
+            src/main/cpp/player/AVComponentStream.cpp
+            src/main/cpp/player/AvFramePool.cpp
+            src/main/cpp/player/VideoStream.cpp
+            src/main/cpp/player/AudioStream.cpp
+            src/main/cpp/player/SubtitleFrameQueue.cpp
+            src/main/cpp/player/SubtitleStream.cpp
+            src/main/cpp/player/SSAHandler.cpp
+            src/main/cpp/player/convert.cpp
+            src/main/cpp/player/ImageSubHandler.cpp
+            src/main/cpp/player/BasicYUVConverter.cpp
+            src/main/cpp/player/YUV16to8Converter.cpp
+            src/main/cpp/player/Frame.cpp
+            src/main/cpp/player/FrameQueue.cpp
+            src/main/cpp/player/PacketQueue.cpp
+            src/main/cpp/player/Clock.cpp
+            src/main/cpp/player/Player.cpp
+            src/main/cpp/player/android/JniCallbackHandler.cpp
+            src/main/cpp/player/android/JniVideoRenderer.cpp
+            src/main/cpp/player/android/JniHelper.cpp
+            src/main/cpp/player/android/player_jni.cpp
+            src/main/cpp/player/android/AudioRenderer.cpp
+        )
 
 target_link_libraries(application
                         android

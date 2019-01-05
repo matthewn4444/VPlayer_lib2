@@ -52,7 +52,6 @@ public class VPlayer2NativeController {
     private static final long SEND_SUBTITLE_FRAME_SIZE_TIMEOUT = 300;
 
     static {
-        // TODO allow dynamic path loading, check for text relocations for armv7
         System.loadLibrary("ffmpeg");
         System.loadLibrary("application");
         nativeInit();

@@ -8,7 +8,7 @@ extern "C" {
 #include <android/native_window_jni.h>
 #include <mutex>
 #include <android/log.h>
-#include "IVideoRenderer.h"
+#include "../IVideoRenderer.h"
 
 class JniVideoRenderer : public IVideoRenderer {
 public:

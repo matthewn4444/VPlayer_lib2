@@ -213,7 +213,7 @@ void Player::seek(long positionMill) {
     // Seek to position, if started before duration is gained, bound it later
     long requested = std::max(positionMill, 0L);
     if (mDurationMs) {
-        requested = std::min(requested, mDurationMs);
+        requested = std::min(requested, (long) mDurationMs);
     }
     requested *= MS_TO_TIME_BASE;
 
