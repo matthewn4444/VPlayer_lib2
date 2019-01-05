@@ -1,7 +1,6 @@
 #ifndef SUBTITLESTREAM_H
 #define SUBTITLESTREAM_H
 
-#include <ass/ass.h>
 #include "StreamComponent.h"
 #include "SubtitleFrameQueue.h"
 

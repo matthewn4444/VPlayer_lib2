@@ -1,6 +1,7 @@
 #ifndef SSAHANDLER_H
 #define SSAHANDLER_H
 
+#include "ASSRenderer.h"
 #include "SubtitleStream.h"
 
 class SSAHandler : public SubtitleStream::SubtitleHandlerBase {
@@ -26,13 +27,9 @@ public:
 
     void flush() override;
 
-    void blendSSA(AVFrame *vFrame, const ASS_Image *subImage);
-
-
 private:
     std::mutex mAssMutex;
-    ASS_Library* mAssLibrary;
-    ASS_Renderer* mAssRenderer;
+    ASSRenderer* mRenderer;
     ASS_Track* mAssTrack;
     AVSubtitle mTmpSubtitle;
     int64_t mLastPts;

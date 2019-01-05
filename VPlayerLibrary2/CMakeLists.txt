@@ -48,8 +48,11 @@ add_library(application SHARED
             src/main/cpp/player/PacketQueue.cpp
             src/main/cpp/player/Clock.cpp
             src/main/cpp/player/Player.cpp
+            src/main/cpp/player/ASSRenderer.cpp
+            src/main/cpp/player/ASSBitmap.cpp
             src/main/cpp/player/android/JniCallbackHandler.cpp
             src/main/cpp/player/android/JniVideoRenderer.cpp
+            src/main/cpp/player/android/subtitles_jni.cpp
             src/main/cpp/player/android/JniHelper.cpp
             src/main/cpp/player/android/player_jni.cpp
             src/main/cpp/player/android/AudioRenderer.cpp

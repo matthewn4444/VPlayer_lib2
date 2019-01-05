@@ -19,6 +19,11 @@ import android.view.Surface;
 import java.io.File;
 import java.util.Map;
 
+import static com.matthewn4444.vplayerlibrary2.ASSRenderer.DEFAULT_FONT_DROID_NAME;
+import static com.matthewn4444.vplayerlibrary2.ASSRenderer.DEFAULT_FONT_DROID_PATH;
+import static com.matthewn4444.vplayerlibrary2.ASSRenderer.DEFAULT_FONT_NOTO_NAME;
+import static com.matthewn4444.vplayerlibrary2.ASSRenderer.DEFAULT_FONT_NOTO_PATH;
+
 public class VPlayer2NativeController {
     private static final int[] sAudioChannels = {
             // No Channels
@@ -43,12 +48,6 @@ public class VPlayer2NativeController {
     };
 
     private static final boolean AT_LEAST_N = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N;
-
-    private static final String DEFAULT_FONT_DROID_PATH = "/system/fonts/DroidSans-Bold.ttf";
-    private static final String DEFAULT_FONT_DROID_NAME = "Droid Sans Bold";
-    private static final String DEFAULT_FONT_NOTO_PATH = "/system/fonts/NotoSansCJK-Regular.ttc";
-    private static final String DEFAULT_FONT_NOTO_NAME = "Noto Sans";
-
     private static final long SEND_SUBTITLE_FRAME_SIZE_TIMEOUT = 300;
 
     static {
@@ -89,13 +88,7 @@ public class VPlayer2NativeController {
         }
     };
 
-    private final AudioRouting.OnRoutingChangedListener mRoutingChangedListener =
-            new AudioRouting.OnRoutingChangedListener() {
-                @Override
-                public void onRoutingChanged(AudioRouting router) {
-                    remeasureAudioLatency();
-                }
-            };
+    private final AudioRouting.OnRoutingChangedListener mRoutingChangedListener;
 
     VPlayer2NativeController(int displayWidth, int displayHeight) {
         if (initPlayer()) {
@@ -110,9 +103,20 @@ public class VPlayer2NativeController {
         } else {
             mHasInitError = true;
         }
+
+        if (AT_LEAST_N) {
+            mRoutingChangedListener = new AudioRouting.OnRoutingChangedListener() {
+                @Override
+                public void onRoutingChanged(AudioRouting router) {
+                    remeasureAudioLatency();
+                }
+            };
+        } else {
+            mRoutingChangedListener = null;
+        }
     }
 
-    public void setListener(VPlayerListener listener) {
+    void setListener(VPlayerListener listener) {
         mListener = listener;
 
         // There was a jni error on init in constructor
@@ -141,7 +145,7 @@ public class VPlayer2NativeController {
         return mStreamReady;
     }
 
-    public void onDestroy() {
+    void onDestroy() {
         if (AT_LEAST_N && mAudioTrack != null) {
             mAudioTrack.removeOnRoutingChangedListener(mRoutingChangedListener);
             mAudioTrack = null;
@@ -155,7 +159,7 @@ public class VPlayer2NativeController {
     }
 
     @MainThread
-    public void setSubtitleFrameSize(int width, int height) {
+    void setSubtitleFrameSize(int width, int height) {
         mPendingSubtitleWidth = width;
         mPendingSubtitleHeight = height;
 
