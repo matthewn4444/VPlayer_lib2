@@ -133,8 +133,8 @@ int AudioStream::onRenderThread() {
         return error(AVERROR(ENOMEM), "Cannot create audio renderer");
     }
 
+    Frame *frame = nullptr;
     while (!hasAborted()) {
-        Frame *frame;
         AVFrame *af;
 
         // Pause if needed
@@ -149,6 +149,15 @@ int AudioStream::onRenderThread() {
         waitIfRenderPaused();
         if (hasAborted()) {
             break;
+        }
+
+        // After paused, re-enable renderer and update the clock to new time
+        if (mPlaybackStateChanged) {
+           if (frame) {
+                updateClock(frame, Clock::now());
+                mAudioRenderer->play();
+            }
+            mPlaybackStateChanged = false;
         }
 
         // Mute if needed
@@ -227,15 +236,7 @@ int AudioStream::onRenderThread() {
         }
 
         // Update audio clock
-        {
-            std::lock_guard<std::mutex> lk(mQueue->getMutex());
-            if (!isnan(frame->pts())) {
-                getClock()->setTimeAt(frame->pts(), frameDecodeStart, frame->serial());
-                getExternalClock()->syncToClock(getClock());
-                mAudioRenderer->updateLatency(mLatencyInvalidated);
-                mLatencyInvalidated = false;
-            }
-        }
+        updateClock(frame, frameDecodeStart);
     }
     return 0;
 }
@@ -251,6 +252,7 @@ int AudioStream::decodeAudioFrame(AVFrame* af, int wantedNbSamples, uint8_t **ou
     int64_t inLayout = (af->channel_layout
                         && af->channels == av_get_channel_layout_nb_channels(af->channel_layout))
                        ? (int64_t) af->channel_layout : av_get_default_channel_layout(af->channels);
+
     if (af->format != format
         || layout != inLayout
         || af->sample_rate != sampleRate
@@ -348,4 +350,14 @@ int AudioStream::syncClocks(AVFrame* frame) {
         }
     }
     return wantedSamples;
+}
+
+void AudioStream::updateClock(Frame *frame, double time) {
+    std::lock_guard<std::mutex> lk(mQueue->getMutex());
+    if (!isnan(frame->pts())) {
+        getClock()->setTimeAt(frame->pts(), time, frame->serial());
+        getExternalClock()->syncToClock(getClock());
+        mAudioRenderer->updateLatency(mLatencyInvalidated);
+        mLatencyInvalidated = false;
+    }
 }

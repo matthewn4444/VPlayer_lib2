@@ -33,6 +33,7 @@ protected:
 private:
     int decodeAudioFrame(AVFrame* frame, int wantedNumSamples, uint8_t **out);
     int syncClocks(AVFrame* frame);
+    void updateClock(Frame *frame, double time);
 
     IAudioRenderer* mAudioRenderer;
     bool mIsMuted;
