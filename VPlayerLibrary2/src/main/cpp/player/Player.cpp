@@ -17,6 +17,8 @@ extern "C" {
 /* seek threshold is about 1/1000 of the video's duration */
 #define SEEK_THRESHOLD_RATIO 0.001
 
+#define BEFORE_SEEK_SUBTITLES_TIME_MS 7000
+
 #define MAX_QUEUE_SIZE (15 * 1024 * 1024)
 #define sTag "NativePlayer"
 
@@ -506,6 +508,7 @@ int Player::tReadLoop(AVFormatContext *context) {
 // FIXME the +-2 is due to rounding being not done in the correct direction in generation
 //      of the seek_pos/seek_rel variables, from ffplay.c
 
+            mSeekRequested = false;
             if ((ret = avformat_seek_file(context, -1, seekMin, seekTarget, seekMax, 0)) < 0) {
                 __android_log_print(ANDROID_LOG_ERROR, sTag, "%s: error in seeking", mFilepath);
             } else {
@@ -514,10 +517,12 @@ int Player::tReadLoop(AVFormatContext *context) {
                         return error(ret, "Seek failed because could not flush packets");
                     }
                 }
+                if ((ret = readSubtitlesOnSeek(context, seekTarget, seekMin, seekMax)) < 0) {
+                    return error(ret, "Unable to get subtitles around this seek time");
+                }
                 mExtClock.setPts(seekTarget / (double) AV_TIME_BASE);
             }
             mLastSentPlaybackTimeSec = 0;
-            mSeekRequested = false;
             mAttachmentsRequested = true;
             mIsEOF = false;
             mWaitingFrameAfterSeek = true;
@@ -622,12 +627,10 @@ int Player::tReadLoop(AVFormatContext *context) {
                 error(context->pb->error);
                 break;
             }
-            // TODO is this really needed anymore?
-//            std::unique_lock<std::mutex> lk(waitMutex);
-//            mReadThreadCondition.wait_for(lk, (std::chrono::milliseconds(10)));
-            _log("Waiting cuz error or everything is done parsing, wake me up when needed (seek)");
+
+            // No more packets left but still need to continue processing states, just wait a bit
             std::unique_lock<std::mutex> lk(waitMutex);
-            mReadThreadCondition.wait(lk);
+            mReadThreadCondition.wait_for(lk, (std::chrono::milliseconds(10)));
             continue;
         } else {
             mIsEOF = false;
@@ -727,4 +730,44 @@ int Player::sendMetadataReady(AVFormatContext *context) {
 
 void Player::sleepMs(long ms) {
     std::this_thread::sleep_for((std::chrono::milliseconds(ms)));
+}
+
+int Player::readSubtitlesOnSeek(AVFormatContext* ctx, int64_t target, int64_t min, int64_t max) {
+    int ret = 0;
+    // Anytime target does not equal to seek, then new seek has occurred, then exit
+    if (mSubtitleStream && target == mSeekPos) {
+        // Read next packet to get the keyframe pts of where seeked, will scan subs up to this time
+        AVPacket pkt;
+        if ((ret = av_read_frame(ctx, &pkt)) < 0) {
+            return ret;
+        }
+
+        // Go back a couple of seconds to scan for previous subtitles from current time
+        int64_t endTime = pkt.pts;
+        if (target == mSeekPos) {
+            int64_t time = std::max((pkt.pts - BEFORE_SEEK_SUBTITLES_TIME_MS) * 1000, (int64_t) 0);
+            if ((ret = avformat_seek_file(ctx, -1, min, time, max, 0)) < 0) {
+                return ret;
+            }
+        }
+
+        // From new seek time, scan all the packets for subs until target time
+        do {
+            if ((ret = av_read_frame(ctx, &pkt)) < 0) {
+                return ret;
+            }
+            if (pkt.pts >= 0 && mSubtitleStream->canEnqueueStreamPacket(pkt)) {
+                if ((ret = mSubtitleStream->getPacketQueue()->enqueue(&pkt)) < 0) {
+                    return ret;
+                }
+            }
+        }
+        while(pkt.pts < endTime && target == mSeekPos);
+
+        // Seek back to original position to continue
+        if ((ret = avformat_seek_file(ctx, -1, min, target, max, 0)) < 0) {
+            return ret;
+        }
+    }
+    return 0;
 }

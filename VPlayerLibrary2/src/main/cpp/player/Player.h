@@ -82,6 +82,7 @@ private:
     void readThread();
     int tOpenStreams(AVFormatContext *context);
     int tReadLoop(AVFormatContext *context);
+    int readSubtitlesOnSeek(AVFormatContext* ctx, int64_t target, int64_t min, int64_t max);
 
     AVPacket mFlushPkt;
     const char* mFilepath;      // TODO maybe we won't need this
