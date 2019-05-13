@@ -74,8 +74,8 @@ public class VPlayer2NativeController {
     private boolean mHasInitError;
 
     // Sending subtitles to player, but delay sending to avoid flooding
-    private int mPendingSubtitleWidth;
-    private int mPendingSubtitleHeight;
+    int mPendingSubtitleWidth;
+    int mPendingSubtitleHeight;
     private long mLastTimeSentSubtitleSize;
     private boolean mWaitingToSendSubtitleSize;
 
@@ -90,9 +90,8 @@ public class VPlayer2NativeController {
 
     private final AudioRouting.OnRoutingChangedListener mRoutingChangedListener;
 
-    VPlayer2NativeController(int displayWidth, int displayHeight) {
+    VPlayer2NativeController() {
         if (initPlayer()) {
-            nativeSetSubtitleFrameSize(displayWidth, displayHeight);
 
             // Check for default font
             if (new File(DEFAULT_FONT_NOTO_PATH).exists()) {
@@ -159,7 +158,7 @@ public class VPlayer2NativeController {
     }
 
     @MainThread
-    void setSubtitleFrameSize(int width, int height) {
+    void setSubtitleResolution(int width, int height) {
         mPendingSubtitleWidth = width;
         mPendingSubtitleHeight = height;
 

@@ -1,7 +1,6 @@
 package com.matthewn4444.vplayerlibrary2;
 
 import android.content.Context;
-import android.content.res.Resources;
 import android.graphics.PixelFormat;
 import android.os.AsyncTask;
 import android.support.annotation.IntDef;
@@ -9,7 +8,6 @@ import android.support.annotation.MainThread;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.AttributeSet;
-import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -29,7 +27,6 @@ public class VPlayerView extends FrameLayout {
     public static final int AVMEDIA_TYPE_VIDEO = 0;
     public static final int AVMEDIA_TYPE_AUDIO = 1;
     public static final int AVMEDIA_TYPE_SUBTITLE = 2;
-
 
     private final SurfaceHolder.Callback mSurfaceCallback = new SurfaceHolder.Callback() {
 
@@ -108,9 +105,7 @@ public class VPlayerView extends FrameLayout {
         mVideoSurface.getHolder().setFormat(PixelFormat.RGBA_8888);
         mSubtitlesSurface.setZOrderMediaOverlay(true);
         mSubtitlesSurface.getHolder().setFormat(PixelFormat.RGBA_8888);
-
-        final DisplayMetrics dm = Resources.getSystem().getDisplayMetrics();
-        mController = new VPlayer2NativeController(dm.widthPixels, dm.heightPixels);
+        mController = new VPlayer2NativeController();
     }
 
     public void openFile(String filepath) {
@@ -157,8 +152,8 @@ public class VPlayerView extends FrameLayout {
     }
 
     @MainThread
-    public void setSubtitleFrameSize(int width, int height) {
-        mController.setSubtitleFrameSize(width, height);
+    public void setSubtitleResolution(int width, int height) {
+        mController.setSubtitleResolution(width, height);
     }
 
     public void setDefaultSubtitleFont(String fontPath, String fontFamily) {
@@ -175,5 +170,16 @@ public class VPlayerView extends FrameLayout {
         mController.onDestroy();
         mController = null;
         super.onDetachedFromWindow();
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        // If the width and height was not already set, then resize to the size of the view
+        if (mController.mPendingSubtitleWidth <= 0 || mController.mPendingSubtitleHeight <= 0) {
+            mController.setSubtitleResolution(MeasureSpec.getSize(widthMeasureSpec),
+                    MeasureSpec.getSize(heightMeasureSpec));
+        }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+
     }
 }

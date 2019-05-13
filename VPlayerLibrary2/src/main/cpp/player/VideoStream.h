@@ -31,6 +31,10 @@ public:
 
     float getAspectRatio();
 
+    int width();
+
+    int height();
+
 protected:
     int onProcessThread() override;
     int onRenderThread() override;

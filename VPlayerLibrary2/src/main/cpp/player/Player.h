@@ -73,6 +73,7 @@ public:
 
     void invalidateVideoFrame();
 private:
+    void resizeSubtitleFrameWithAspectRatio(int width, int height);
     void reset();
     void sleepMs(long ms);
     int sendMetadataReady(AVFormatContext *context);

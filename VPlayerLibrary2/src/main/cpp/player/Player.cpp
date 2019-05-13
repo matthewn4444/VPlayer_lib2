@@ -245,7 +245,7 @@ void Player::setSubtitleFrameSize(int width, int height) {
         mSubtitleFrameWidth = width;
         mSubtitleFrameHeight = height;
         if (mSubtitleStream) {
-            mSubtitleStream->setFrameSize(width, height);
+            resizeSubtitleFrameWithAspectRatio(width, height);
         }
     }
 }
@@ -282,6 +282,17 @@ void Player::invalidateVideoFrame() {
     if (mVideoStream) {
         mVideoStream->invalidNextFrame();
     }
+}
+
+void Player::resizeSubtitleFrameWithAspectRatio(int width, int height) {
+
+    const float ratio = mVideoStream->getAspectRatio();
+    if ((float) width / height <= ratio) {
+        width = (int) (height * ratio);
+    } else {
+        height = (int) (height / ratio);
+    }
+    mSubtitleStream->setFrameSize(width, height);
 }
 
 void Player::reset() {
@@ -445,17 +456,15 @@ int Player::tOpenStreams(AVFormatContext *context) {
             }
             int width = mSubtitleFrameWidth;
             int height = mSubtitleFrameHeight;
-
-            // Get the max width and height with video aspect ratio
             if (mVideoStream) {
-                const float ratio = mVideoStream->getAspectRatio();
-                if ((float) width / height > ratio) {
-                    width = (int) (height * ratio);
+                if (width > 0 && height > 0) {
+                    resizeSubtitleFrameWithAspectRatio(width, height);
                 } else {
-                    height = (int) (height / ratio);
+                    width = mVideoStream->width();
+                    height = mVideoStream->height();
+                    mSubtitleStream->setFrameSize(width, height);
                 }
             }
-            mSubtitleStream->setFrameSize(width, height);
 
             // Set the default font for subtitles
             mSubtitleStream->setDefaultFont(mSubtitleFontPath, mSubtitleFontFamily);

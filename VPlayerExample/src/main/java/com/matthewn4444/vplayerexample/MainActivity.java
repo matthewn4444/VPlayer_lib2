@@ -122,8 +122,6 @@ public class MainActivity extends BaseActivity {
                 mVideoView.frameStep();
             }
         });
-
-        mVideoView.seek(362049);
     }
 
     @Override

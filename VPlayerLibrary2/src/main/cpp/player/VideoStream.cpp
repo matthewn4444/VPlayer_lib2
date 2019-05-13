@@ -81,6 +81,14 @@ float VideoStream::getAspectRatio() {
     return (float) mCContext->width / mCContext->height;
 }
 
+int VideoStream::width() {
+    return mCContext->width;
+}
+
+int VideoStream::height() {
+    return mCContext->height;
+}
+
 int VideoStream::open() {
     int ret = AVComponentStream::open();
     if (ret < 0) {
