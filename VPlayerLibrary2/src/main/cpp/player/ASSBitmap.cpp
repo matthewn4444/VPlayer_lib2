@@ -76,7 +76,8 @@ void ASSBitmap::flattenImage() {
     size = 0;
     stride = 0;
     const auto width = (size_t) (x2 - x1);
-    const size_t newSize = width * (y2 - y1) * 4;
+    // Align width to 8 bytes for assembly operations when blending
+    const size_t newSize = (size_t) (ceil((float)width / 8.0f) * 8) * (y2 - y1) * 4;
     if (newSize <= 0) {
         // Cannot flatten with in valid size
         return;
